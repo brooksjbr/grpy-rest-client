@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import subprocess
-import os
 from pathlib import Path
 
 HOME = Path.home()
@@ -26,6 +25,7 @@ def run_command(command):
     print(f"Command output: {process.stdout}")
     return process
 
+
 def setup_virtualenv():
     """Create and configure virtualenv"""
     venv_path = get_venv_path()
@@ -36,12 +36,14 @@ def setup_virtualenv():
 
     commands = [
         f"{venv_path}/bin/python3 -m pip install -e .",
+        f"{venv_path}/bin/python3 -m pip install -r dev_requirements.txt",
         f"{venv_path}/bin/python3 -m pip install -r test_requirements.txt",
     ]
 
     for cmd in commands:
         print(f"Running: {cmd}")
         run_command(cmd)
+
 
 if __name__ == "__main__":
     setup_virtualenv()

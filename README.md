@@ -21,8 +21,8 @@ cd grpy-rest-client
 2. Create a virtual environment and activate it:
 
 ```bash
-python3 tools/bootstrap.py
-source ~/projects/.venv/grpy-rest-client/bin/activate
+python3 tools/bootstrap_dev.py
+source ~/projects/.venvs/grpy-rest-client/bin/activate
 ```
 
 ## Running Tests
