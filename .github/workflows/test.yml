@@ -28,7 +28,7 @@ jobs:
                   pip install -e ".[test]"
             - name: Run tests
               run: |
-                  pytest tests/ --cov=grpy --cov-report=xml
+                  pytest --cov=grpy --cov-report=xml tests/
 
             - name: Upload coverage reports
               uses: codecov/codecov-action@v3
