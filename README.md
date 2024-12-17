@@ -1,13 +1,13 @@
-# GrPy REST Client
+# Grpy REST Client
 
 [![Tests](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/test.yml/badge.svg)](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/test.yml)
 [![Lint](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/lint.yml/badge.svg)](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/lint.yml)
 
-Generic extraction module, fetches data from APIs
+A simple rest client to manage http requests.
 
 ## Features
 
--   Makes Restful requests URLs
+-   Makes RESTful HTTP requests
 
 ## Development Setup
 
