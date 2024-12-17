@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "grpy_rest_client"
+version = "0.0.1"
+
+description = "A package for making HTTP requests."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+classifiers = [
+  # https://pypi.org/classifiers/
+  "License :: OSI Approved :: MIT License",
+  "Development Status :: 1 - Planning",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.9",
+]
+dependencies = [
+    "requests>=2.28.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/brooksjbr/grpy-rest-client"
+Documentation = "https://github.com/brooksjbr/grpy-rest-client/blob/main/README.md"
+Repository = "https://github.com/brooksjbr/grpy-rest-client.git"
+
+[project.optional-dependencies]
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src"]
+sources = ["src"]
