@@ -29,7 +29,7 @@ jobs:
                   pip install pytest-mock requests-mock
             - name: Run tests
               run: |
-                  pytest tests/ --cov=src/grpy --cov-report=xml
+                  pytest tests/ --cov=grpy --cov-report=xml
 
             - name: Upload coverage reports
               uses: codecov/codecov-action@v3
