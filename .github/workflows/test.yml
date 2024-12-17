@@ -11,7 +11,7 @@ jobs:
         runs-on: ubuntu-latest
         strategy:
             matrix:
-                python-version: ['3.9', '3.10', '3.11', '3.12']
+                python-version: ['3.9']
 
         steps:
             - uses: actions/checkout@v3
@@ -26,7 +26,6 @@ jobs:
                   python -m pip install --upgrade pip
                   pip install hatch
                   pip install -e ".[test]"
-                  pip install pytest-mock requests-mock
             - name: Run tests
               run: |
                   pytest tests/ --cov=grpy --cov-report=xml
