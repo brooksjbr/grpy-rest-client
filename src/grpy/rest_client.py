@@ -9,7 +9,7 @@ information for reuse.
 
 
 Classes:
-    RequestClient: Child class of Request and Session.
+    RestClient: Child class of Request and Session.
     - url (str): The base URL for the API.
 """
 
@@ -24,7 +24,7 @@ class MissingRequestURL(Exception):
 
 
 class RestClient(Request, Session):
-    """RequestClient is a child class of Request and Session."""
+    """RestClient is a child class of Request and Session."""
 
     def __enter__(self) -> "RestClient":  # Type annotation
         """Enter the context manager and return the client."""
