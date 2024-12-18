@@ -35,7 +35,10 @@ class RestClient(Request, Session):
         if exc_type is not None:
             # Log the exception details
             logging.error(
-                "Exception occurred: %s: %s: %s", exc_type.__name__, exc_val, exc_tb
+                "Exception occurred: %s: %s: %s",
+                exc_type.__name__,
+                exc_val,
+                exc_tb,
             )
         self.close()
 

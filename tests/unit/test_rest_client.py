@@ -12,7 +12,7 @@ Dependencies:
 import pytest
 import requests_mock
 
-from grpy.rest_client import RestClient, MissingRequestURL
+from grpy.rest_client import MissingRequestURL, RestClient
 
 
 class TestRestClient:
