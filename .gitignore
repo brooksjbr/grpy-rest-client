@@ -34,6 +34,8 @@ wheels/
 *.swp
 *.swo
 .DS_Store
+.coverage
+.coverage.*
 
 # Logs and databases
 *.log

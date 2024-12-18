@@ -7,7 +7,7 @@ A simple rest client to manage http requests.
 
 ## Features
 
--   Makes RESTful HTTP requests
+-   Makes REST HTTP requests
 
 ## Development Setup
 
