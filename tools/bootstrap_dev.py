@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 
 HOME = Path.home()
-VENV_PATH = 'projects/.venvs'
+VENV_PATH = "projects/.venvs"
 PROJECT_NAME = Path.cwd().name
 
 
@@ -20,7 +20,7 @@ def run_command(command):
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
     )
     print(f"Command output: {process.stdout}")
     return process
