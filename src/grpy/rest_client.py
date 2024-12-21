@@ -16,7 +16,7 @@ Classes:
 import logging
 import re
 
-from requests import Request, Session
+from requests import Request, Session, exceptions
 
 
 class MissingRequestURL(Exception):
@@ -44,12 +44,13 @@ class RestClient(Request, Session):
 
     VALID_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"}
 
-    def __init__(self, url: str, method: str = "GET"):
+    def __init__(self, url: str, method: str = "GET", endpoint: str = ""):
         """Initialize the API client with a URL and headers.
 
         Args:
             url (str): The base URL for the API.
             method (str): The HTTP method to use. Defaults to "GET".
+            endpoint (str): The API endpoint. Defaults to an empty string.
 
         Raises:
             MissingRequestURL: If url is an empty string.
@@ -58,8 +59,10 @@ class RestClient(Request, Session):
         Request.__init__(self)
         Session.__init__(self)
 
-        if url == "":
+        if url == "" or url is None:
             raise MissingRequestURL("Base URL is missing")
+        else:
+            self.url = url.strip("/")
 
         if not re.match(r"^https?://", url):
             raise ValueError("Base URL must start with http:// or https://")
@@ -68,14 +71,43 @@ class RestClient(Request, Session):
             raise ValueError(
                 f"Invalid HTTP method. Must be one of {self.VALID_METHODS}"
             )
+        else:
+            self.method = method.upper()
 
-        # Initialize the request and session objects
-        self.req = Request(method, url)
-        self.url = self.req.url
-        self.method = self.req.method
+        if endpoint != "" or endpoint is not None:
+            self.endpoint = endpoint.lstrip("/")
+        else:
+            self.endpoint = ""
+
+        # Initialize session objects
         self.session = Session()
-        self.init_request = self.session.prepare_request(self.req)
 
-    def send_request(self):
-        """Send an HTTP request and return the response."""
-        return self.session.send(self.init_request)
+    def handle_request(self):
+        def wrapper(*args, **kwargs):
+            """Wrapper function to handle request exceptions and logging."""
+
+            try:
+                response = self(*args, **kwargs)
+                response.raise_for_status()
+                return response
+            except exceptions.RequestException as e:
+                logging.error(f"Request failed: {str(e)}")
+                raise
+            except Exception as e:
+                logging.error(f"Unexpected error: {str(e)}")
+                raise
+
+        return wrapper
+
+    @handle_request
+    def make_request(self, **kwargs):
+        """Make a REST request with specified parameters.
+
+        Args:
+            method (str): HTTP method (GET, POST, etc.)
+            endpoint (str): API endpoint to call
+            **kwargs: Additional request parameters (headers, json, params, etc.)
+        """
+        self.req = Request(self.method, f"{self.url}/{self.endpoint}", **kwargs)
+        prepared = self.session.prepare_request(self.req)
+        return self.session.send(prepared)
