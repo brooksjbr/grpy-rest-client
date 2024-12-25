@@ -1,16 +1,17 @@
 import asyncio
 
-from grpy.rest_client import RestClient
+from grpy.async_rest_client import AsyncRestClient
+
+BASE_URL = "https://jsonplaceholder.typicode.com"
+ENDPOINT = "/todos/1"
 
 
 async def main():
-    async with RestClient(
-        "https://jsonplaceholder.typicode.com", endpoint="users"
-    ) as client:
-        response = await client.handle_request(params={"page": 1})
-        return response
+    async with AsyncRestClient(BASE_URL, endpoint=ENDPOINT) as client:
+        response = await client.handle_request()
+        json_response = await response.json()
+        print(json_response)
 
 
 # Run the async code
-response = asyncio.run(main())
-print(response)
+asyncio.run(main())
