@@ -8,16 +8,18 @@ class AsyncRestClient(BaseRestClient):
 
     def __init__(self, url: str, method: str = "GET", endpoint: str = ""):
         """Initialize the API client with a URL"""
-        super().__init__(url, method, endpoint)
-        self.url = url
-        self.method = method
-        self.endpoint = endpoint
+        self.url = url.strip("/")
+        self.method = method.upper()
+        self.endpoint = endpoint.strip("/")
         self.headers = {}
         self.params = {}
         self.data = {}
         self.json = {}
         self.files = {}
         self.session = None
+
+        if self.method not in self.VALID_METHODS:
+            raise ValueError(f"Invalid HTTP method: {self.method}")
 
     async def __aenter__(self):
         """Enter the context manager."""
@@ -40,6 +42,9 @@ class AsyncRestClient(BaseRestClient):
     # files=self.files,
     async def handle_request(self, **kwargs):
         """Make a REST request with specified parameters."""
+        if self.endpoint:
+            self.url = f"{self.url}/{self.endpoint}"
+
         response = await self.session.request(
             method=self.method,
             url=self.url,
