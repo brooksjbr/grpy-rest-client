@@ -1,4 +1,4 @@
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientTimeout
 
 from grpy.base_rest_client import BaseRestClient
 
@@ -12,10 +12,7 @@ class AsyncRestClient(BaseRestClient):
         self.method = method.upper()
         self.endpoint = endpoint.strip("/")
         self.headers = {}
-        self.params = {}
-        self.data = {}
-        self.json = {}
-        self.files = {}
+        self.timeout = ClientTimeout(total=60)
         self.session = None
 
         if self.method not in self.VALID_METHODS:
@@ -35,20 +32,19 @@ class AsyncRestClient(BaseRestClient):
         """Set headers for the request."""
         self.headers.update(headers)
 
-    # TODO: Implement additional request parameters
-    # params=self.params,
-    # data=self.data,
-    # json=self.json,
-    # files=self.files,
-    async def handle_request(self, **kwargs):
+    async def handle_request(self, timeout: int, **kwargs):
         """Make a REST request with specified parameters."""
         if self.endpoint:
             self.url = f"{self.url}/{self.endpoint}"
+
+        if timeout:
+            self.timeout = ClientTimeout(total=timeout)
 
         response = await self.session.request(
             method=self.method,
             url=self.url,
             headers=self.headers,
+            timeout=self.timeout,
             **kwargs,
         )
         return response
