@@ -7,6 +7,11 @@ class BaseRestClient(ABC):
     VALID_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"}
 
     @abstractmethod
+    def __init__(self, url: str, method: str = "GET", endpoint: str = ""):
+        """Initialize the API client with a URL"""
+        raise NotImplementedError("__init__ must be implemented by subclass")
+
+    @abstractmethod
     def __aenter__(self):
         """Enter the context manager."""
         raise NotImplementedError("__enter__ must be implemented by subclass")

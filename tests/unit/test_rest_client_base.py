@@ -1,6 +1,7 @@
 """
 Unit tests for RequestClient class
 """
+
 from abc import ABC, abstractmethod
 
 
