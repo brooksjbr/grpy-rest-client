@@ -22,7 +22,7 @@ class BaseRestClient(ABC):
         raise NotImplementedError("set_headers must be implemented by subclass")
 
     @abstractmethod
-    def handle_exception(self):
+    def handle_exception(func):
         """Handle HTTP requests and exceptions."""
         raise NotImplementedError(
             "handle_request must be implemented by subclass"

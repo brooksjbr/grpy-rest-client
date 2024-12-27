@@ -38,7 +38,6 @@ class AsyncRestClient(BaseRestClient):
         """Update headers for the request."""
         self.headers.update(headers)
 
-    @staticmethod
     def handle_exception(func):
         async def wrapper(*args, **kwargs):
             try:
