@@ -2,6 +2,9 @@ from aiohttp import ClientSession, ClientTimeout
 
 from grpy.base_rest_client import BaseRestClient
 
+# Define the default timeout at module level
+DEFAULT_TIMEOUT = ClientTimeout(total=60)
+
 
 class AsyncRestClient(BaseRestClient):
     """Async REST client for making HTTP requests."""
@@ -11,15 +14,14 @@ class AsyncRestClient(BaseRestClient):
         url: str,
         method: str = "GET",
         endpoint: str = "",
-        retries: int = 3,
+        timeout: ClientTimeout = DEFAULT_TIMEOUT,
     ):
         """Initialize the API client with a URL"""
         self.url = url.strip("/")
         self.method = method.upper()
         self.endpoint = endpoint.strip("/")
         self.headers = {}
-        self.timeout = ClientTimeout(total=60)
-        self.retries = retries
+        self.timeout = timeout
         self.session = None
 
         if self.method not in self.VALID_METHODS:
