@@ -1,3 +1,6 @@
+from asyncio import TimeoutError
+from urllib.parse import urljoin
+
 from aiohttp import ClientSession, ClientTimeout
 
 from grpy.base_rest_client import BaseRestClient
@@ -16,7 +19,6 @@ class AsyncRestClient(BaseRestClient):
         endpoint: str = "",
         timeout: ClientTimeout = DEFAULT_TIMEOUT,
     ):
-        """Initialize the API client with a URL"""
         self.url = url.strip("/")
         self.method = method.upper()
         self.endpoint = endpoint.strip("/")
@@ -40,24 +42,27 @@ class AsyncRestClient(BaseRestClient):
         """Update headers for the request."""
         self.headers.update(headers)
 
-    def handle_exception(func):
-        async def wrapper(*args, **kwargs):
+    def handle_exception(method):
+        async def wrapper(self, *args, **kwargs):
             try:
-                return await func(*args, **kwargs)
+                return await method(self, *args, **kwargs)
+            except TimeoutError as e:
+                raise TimeoutError(f"Request timed out: {e}") from e
             except Exception as exc:
-                raise exc
+                raise exc from exc
 
         return wrapper
 
     @handle_exception
     async def handle_request(self, **kwargs):
         """Make a REST request with specified parameters."""
-        if self.endpoint:
-            self.url = f"{self.url}/{self.endpoint}"
 
+        request_url = (
+            urljoin(self.url, self.endpoint) if self.endpoint else self.url
+        )
         response = await self.session.request(
             method=self.method,
-            url=self.url,
+            url=request_url,
             headers=self.headers,
             timeout=self.timeout,
             **kwargs,
