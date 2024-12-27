@@ -1,28 +1,36 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from aiohttp import ClientSession
 
 from grpy.async_rest_client import AsyncRestClient
 
-MOCK_URL = "https://test.api.com "
+TEST_URL = "https://api.example.com"
 
 
-@pytest.mark.asyncio
-class TestAsyncRestClientRequest:
-    """Test cases for the AsyncRestClient class."""
+class TestAsyncRestClient:
+    """Test the AsyncRestClient class."""
 
-    async def test_async_rest_client_request(self):
-        """Test the AsyncRestClient class."""
-        mock_response = AsyncMock()
-        mock_response.json.return_value = {"data": "test"}
-        mock_response.status = 200
+    @pytest.fixture
+    def mock_response(self):
+        """Create a mock response object."""
+        return AsyncMock(
+            spec=ClientSession, status=200, data={"data": "Mocked response"}
+        )
 
-        mock_session = AsyncMock(ClientSession)
-        mock_session.request.return_value = mock_response
+    @pytest.fixture
+    def mock_client_session(self, mock_response):
+        """Create a mock client session."""
+        with patch(
+            "aiohttp.ClientSession.request",
+            new=AsyncMock(return_value=mock_response),
+        ):
+            yield
 
-        async def main():
-            async with AsyncRestClient(MOCK_URL) as client:
-                response = await client.handle_request()
-                assert response.status == 200
-                assert response.json() == {"data": "test"}
+    @pytest.mark.parametrize(
+        "method", ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"]
+    )
+    async def test_http_methods_sucess(self, mock_client_session, method):
+        async with AsyncRestClient(TEST_URL, method=method) as client:
+            response = await client.handle_request()
+            assert response.status == 200
