@@ -56,7 +56,6 @@ class AsyncRestClient(BaseRestClient):
     @handle_exception
     async def handle_request(self, **kwargs):
         """Make a REST request with specified parameters."""
-
         request_url = (
             urljoin(self.url, self.endpoint) if self.endpoint else self.url
         )
@@ -67,4 +66,8 @@ class AsyncRestClient(BaseRestClient):
             timeout=self.timeout,
             **kwargs,
         )
+
+        # Raise for error status codes
+        await response.raise_for_status()
+
         return response
