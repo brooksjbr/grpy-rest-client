@@ -14,9 +14,13 @@ class TestAsyncRestClient:
     @pytest.fixture
     def mock_response(self):
         """Create a mock response object."""
-        return AsyncMock(
-            spec=ClientSession, status=200, data={"data": "Mocked response"}
+        mock = AsyncMock(
+            spec=ClientSession,
+            status=200,
+            data={"data": "Mocked response"},
+            raise_for_status=AsyncMock(),  # Add awaitable raise_for_status
         )
+        return mock
 
     @pytest.fixture
     def mock_client_session(self, mock_response):
