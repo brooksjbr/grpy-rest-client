@@ -26,7 +26,7 @@ class TestAsyncRestClientExceptions:
     async def test_timeout_with_custom_duration(self):
         """Test timeout behavior with different duration settings"""
         with patch("aiohttp.ClientSession.request", side_effect=TimeoutError):
-            async with AsyncRestClient(TEST_URL, timeout=0.1) as client:
+            async with AsyncRestClient(TEST_URL, timeout=1) as client:
                 with pytest.raises(TimeoutError):
                     await client.handle_request()
 
