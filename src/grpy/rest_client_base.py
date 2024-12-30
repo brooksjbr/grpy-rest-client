@@ -15,10 +15,12 @@ class RestClientBase(ABC):
         except Exception:
             return "unknown"
 
+    DEFAULT_USER_AGENT = f"grpy-rest-client/{get_version.__func__()}"
+
     DEFAULT_HEADERS = {
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "User-Agent": f"grpy-rest-client/{get_version()}",
+        "User-Agent": DEFAULT_USER_AGENT,
     }
 
     @abstractmethod
