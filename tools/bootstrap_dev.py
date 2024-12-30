@@ -36,8 +36,7 @@ def setup_virtualenv():
 
     commands = [
         f"{venv_path}/bin/python3 -m pip install -e .",
-        f"{venv_path}/bin/python3 -m pip install -r dev_requirements.txt",
-        f"{venv_path}/bin/python3 -m pip install -r test_requirements.txt",
+        f"{venv_path}/bin/python3 -m pip install -r requirements.txt",
     ]
 
     for cmd in commands:
