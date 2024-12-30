@@ -1,15 +1,10 @@
 import pytest
 
 from grpy.rest_client import RestClient
+from grpy.rest_client_base import RestClientBase
 
 MOCK_URL = "https://api.example.com"
 MOCK_ENDPOINT = "/api/v1"
-DEFAULT_TIMEOUT = 60
-DEFAULT_HEADERS = {
-    "Accept": "application/json",
-    "Content-Type": "application/json",
-    "User-Agent": "grpy-rest-client/1.0",
-}
 
 
 @pytest.fixture
@@ -29,12 +24,8 @@ class TestRestClientAttributes:
         assert rest_client.url == MOCK_URL
         assert rest_client.method == "GET"
         assert rest_client.endpoint == ""
-        assert rest_client.timeout.total == DEFAULT_TIMEOUT
-        assert rest_client.headers == {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "User-Agent": "grpy-rest-client/1.0",
-        }
+        assert rest_client.timeout.total == RestClientBase.DEFAULT_TIMEOUT
+        assert rest_client.headers == RestClientBase.DEFAULT_HEADERS
 
     @pytest.mark.asyncio
     async def test_update_headers(self, rest_client):
@@ -59,3 +50,10 @@ class TestRestClientAttributes:
     async def test_update_request_method(self, rest_client):
         rest_client.method = "POST"
         assert rest_client.method == "POST"
+
+    @pytest.mark.asyncio
+    async def test_rest_client_headers_inheritance(self, rest_client):
+        # Verify base headers are inherited
+        assert isinstance(rest_client.headers, dict)
+        assert "User-Agent" in rest_client.headers
+        assert "Accept" in rest_client.headers

@@ -6,13 +6,6 @@ from aiohttp import ClientSession, ClientTimeout
 
 from grpy.rest_client_base import RestClientBase
 
-DEFAULT_TIMEOUT = 60
-DEFAULT_HEADERS = {
-    "Accept": "application/json",
-    "Content-Type": "application/json",
-    "User-Agent": "grpy-rest-client/1.0",
-}
-
 
 class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
     """Async REST client for making HTTP requests."""
@@ -22,18 +15,16 @@ class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
         url: str,
         method: str = "GET",
         endpoint: str = "",
-        timeout: Optional[float] = DEFAULT_TIMEOUT,
+        timeout: Optional[float] = RestClientBase.DEFAULT_TIMEOUT,
         session: Optional[ClientSession] = None,
     ):
-        self.url = url.strip("/")
+        self._validate_http_method(method)
+        self.url = url
         self.method = method.upper()
-        self.endpoint = endpoint.strip("/")
-        self.headers = DEFAULT_HEADERS.copy()
+        self.endpoint = endpoint
+        self.headers = RestClientBase.DEFAULT_HEADERS
         self.session = session
         self.timeout = ClientTimeout(total=timeout)
-
-        if self.method not in self.VALID_METHODS:
-            raise ValueError(f"Invalid HTTP method: {self.method}")
 
     async def __aenter__(self):
         """Enter the context manager."""
