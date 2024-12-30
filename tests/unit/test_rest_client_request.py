@@ -3,13 +3,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from aiohttp import ClientSession
 
-from grpy.async_rest_client import AsyncRestClient
+from grpy.rest_client import RestClient
 
 TEST_URL = "https://api.example.com"
 
 
-class TestAsyncRestClient:
-    """Test the AsyncRestClient class."""
+class TestRestClient:
+    """Test the RestClient class."""
 
     @pytest.fixture
     def mock_response(self):
@@ -35,6 +35,6 @@ class TestAsyncRestClient:
         "method", ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"]
     )
     async def test_http_methods_sucess(self, mock_client_session, method):
-        async with AsyncRestClient(TEST_URL, method=method) as client:
+        async with RestClient(TEST_URL, method=method) as client:
             response = await client.handle_request()
             assert response.status == 200

@@ -1,6 +1,6 @@
 import pytest
 
-from grpy.async_rest_client import AsyncRestClient
+from grpy.rest_client import RestClient
 
 MOCK_URL = "https://api.example.com"
 MOCK_ENDPOINT = "/api/v1"
@@ -14,7 +14,7 @@ DEFAULT_HEADERS = {
 
 @pytest.fixture
 async def rest_client():
-    async with AsyncRestClient(MOCK_URL) as client:
+    async with RestClient(MOCK_URL) as client:
         yield client
 
 
@@ -53,7 +53,7 @@ class TestRestClientAttributes:
     @pytest.mark.asyncio
     async def test_invalid_method(self):
         with pytest.raises(ValueError):
-            AsyncRestClient(MOCK_URL, method="INVALID")
+            RestClient(MOCK_URL, method="INVALID")
 
     @pytest.mark.asyncio
     async def test_update_request_method(self, rest_client):

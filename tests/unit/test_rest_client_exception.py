@@ -4,21 +4,21 @@ from unittest.mock import AsyncMock, patch
 import aiohttp
 import pytest
 
-from grpy.async_rest_client import AsyncRestClient
+from grpy.rest_client import RestClient
 
 TEST_URL = "https://api.example.com"
 
 
-class TestAsyncRestClientExceptions:
+class TestRestClientExceptions:
     """
-    Test cases for AsyncRestClient exception handling.
+    Test cases for RestClient exception handling.
     """
 
     @pytest.mark.asyncio
     async def test_timeout_handling(self):
         """Test handling of request timeouts"""
         with patch("aiohttp.ClientSession.request", side_effect=TimeoutError):
-            async with AsyncRestClient(TEST_URL) as client:
+            async with RestClient(TEST_URL) as client:
                 with pytest.raises(TimeoutError):
                     await client.handle_request()
 
@@ -26,7 +26,7 @@ class TestAsyncRestClientExceptions:
     async def test_timeout_with_custom_duration(self):
         """Test timeout behavior with different duration settings"""
         with patch("aiohttp.ClientSession.request", side_effect=TimeoutError):
-            async with AsyncRestClient(TEST_URL, timeout=1) as client:
+            async with RestClient(TEST_URL, timeout=1) as client:
                 with pytest.raises(TimeoutError):
                     await client.handle_request()
 
@@ -37,7 +37,7 @@ class TestAsyncRestClientExceptions:
             "aiohttp.ClientSession.request",
             side_effect=aiohttp.ClientConnectionError,
         ):
-            async with AsyncRestClient(TEST_URL) as client:
+            async with RestClient(TEST_URL) as client:
                 with pytest.raises(aiohttp.ClientConnectionError):
                     await client.handle_request()
 
@@ -51,7 +51,7 @@ class TestAsyncRestClientExceptions:
         mock_session_request = AsyncMock(return_value=mock_response)
 
         with patch("aiohttp.ClientSession.request", mock_session_request):
-            async with AsyncRestClient(TEST_URL) as client:
+            async with RestClient(TEST_URL) as client:
                 response = await client.handle_request()
                 with pytest.raises(aiohttp.ContentTypeError):
                     await response.json()
@@ -66,7 +66,7 @@ class TestAsyncRestClientExceptions:
             )
 
         with patch("aiohttp.ClientSession.request", side_effect=mock_request):
-            async with AsyncRestClient(TEST_URL) as client:
+            async with RestClient(TEST_URL) as client:
                 with pytest.raises(aiohttp.ClientResponseError):
                     await client.handle_request()
 
@@ -80,7 +80,7 @@ class TestAsyncRestClientExceptions:
             )
 
         with patch("aiohttp.ClientSession.request", side_effect=mock_request):
-            async with AsyncRestClient(TEST_URL) as client:
+            async with RestClient(TEST_URL) as client:
                 with pytest.raises(aiohttp.ClientResponseError):
                     await client.handle_request()
 
@@ -91,6 +91,6 @@ class TestAsyncRestClientExceptions:
             "aiohttp.ClientSession.request",
             side_effect=aiohttp.ClientConnectorSSLError(AsyncMock(), OSError()),
         ):
-            async with AsyncRestClient(TEST_URL) as client:
+            async with RestClient(TEST_URL) as client:
                 with pytest.raises(aiohttp.ClientConnectorSSLError):
                     await client.handle_request()
