@@ -4,7 +4,7 @@ from urllib.parse import urljoin
 
 from aiohttp import ClientSession, ClientTimeout
 
-from grpy.base_rest_client import BaseRestClient
+from grpy.rest_client_base import RestClientBase
 
 DEFAULT_TIMEOUT = 60
 DEFAULT_HEADERS = {
@@ -14,7 +14,7 @@ DEFAULT_HEADERS = {
 }
 
 
-class AsyncRestClient(BaseRestClient, AsyncContextManager["AsyncRestClient"]):
+class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
     """Async REST client for making HTTP requests."""
 
     def __init__(

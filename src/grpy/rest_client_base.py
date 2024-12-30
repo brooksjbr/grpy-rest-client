@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class BaseRestClient(ABC):
+class RestClientBase(ABC):
     """Abstract base class defining the interface for REST clients."""
 
     VALID_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"}
