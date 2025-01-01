@@ -37,6 +37,14 @@ class RestClientBase(ABC):
         if method.upper() not in self.VALID_METHODS:
             raise ValueError(f"Invalid HTTP method: {method}")
 
+    def _validate_timeout(self, timeout: [int, float]) -> None:
+        """Validate timeout is a positive number."""
+        if timeout is not None:
+            if not isinstance(timeout, (int, float)):
+                raise ValueError("Timeout must be a number")
+            if timeout <= 0:
+                raise ValueError("Timeout must be greater than 0")
+
     @abstractmethod
     def update_headers(self, headers: dict[str, str]) -> None:
         """Set headers for the request."""
