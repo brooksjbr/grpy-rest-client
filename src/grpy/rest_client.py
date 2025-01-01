@@ -21,6 +21,7 @@ class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
         headers: Optional[dict] = None,
     ):
         self._validate_http_method(method)
+        self._validate_timeout(timeout)
         self.url = url
         self.method = method.upper()
         self.endpoint = endpoint
