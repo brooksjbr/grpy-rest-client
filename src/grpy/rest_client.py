@@ -17,14 +17,19 @@ class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
         endpoint: str = "",
         timeout: Optional[float] = RestClientBase.DEFAULT_TIMEOUT,
         session: Optional[ClientSession] = None,
+        params: Optional[dict] = None,
+        headers: Optional[dict] = None,
     ):
         self._validate_http_method(method)
         self.url = url
         self.method = method.upper()
         self.endpoint = endpoint
-        self.headers = RestClientBase.DEFAULT_HEADERS
+        self.headers = RestClientBase.DEFAULT_HEADERS.copy()
+        if headers:
+            self.headers.update(headers)
         self.session = session
         self.timeout = ClientTimeout(total=timeout)
+        self.params = params or {}
 
     async def __aenter__(self):
         """Enter the context manager."""
@@ -36,10 +41,6 @@ class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit the context manager."""
         await self.session.close()
-
-    def update_headers(self, headers: dict):
-        """Update headers for the request."""
-        self.headers.update(headers)
 
     def handle_exception(method):
         async def wrapper(self, *args, **kwargs):
@@ -62,11 +63,24 @@ class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
             method=self.method,
             url=request_url,
             headers=self.headers,
+            params=self.params,
             timeout=self.timeout,
             **kwargs,
         )
 
         return response
+
+    def update_headers(self, headers: dict):
+        """Update headers for the request."""
+        self.headers.update(headers)
+
+    def update_params(self, params: dict):
+        """Update request parameters.
+
+        Args:
+            params (dict): Dictionary of query parameters to update or add
+        """
+        self.params.update(params)
 
     def update_timeout(self, timeout: float):
         """Update the client timeout value.
