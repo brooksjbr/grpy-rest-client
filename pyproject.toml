@@ -2,9 +2,10 @@
 build-backend = "hatchling.build"
 requires = ["hatchling>=0.22", "hatch-vcs>=0.2"]
 
+
 [project]
 name = "grpy_rest_client"
-version = "0.0.1"
+version = "0.1.0"
 
 description = "A package for making HTTP requests."
 readme = "README.md"
@@ -28,8 +29,12 @@ dependencies = [
 Homepage = "https://github.com/brooksjbr/grpy-rest-client"
 Documentation = "https://github.com/brooksjbr/grpy-rest-client/blob/main/README.md"
 Repository = "https://github.com/brooksjbr/grpy-rest-client.git"
-
 [project.optional-dependencies]
+dev = [
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "isort>=5.12.0"
+]
 
 [tool.hatch.build.targets.wheel]
 only-include = ["src"]
