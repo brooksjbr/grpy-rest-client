@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import logging
 import os
 import shutil
@@ -39,24 +40,28 @@ def run_command(command, timeout=300):
     return process
 
 
-def setup_virtualenv():
+def setup_virtualenv(force=False):
     """Create and configure virtualenv"""
     venv_path = get_venv_path()
     logger.info(f"Virtualenv path: {venv_path}")
 
     try:
+        if force and venv_path.exists():
+            logger.info(f"Removing existing virtualenv at {venv_path}")
+            shutil.rmtree(venv_path)
+
         if not venv_path.exists():
             logger.info(f"Creating virtualenv at {venv_path}")
             run_command(f"python3 -m venv {venv_path}")
 
-        commands = [
-            f'{venv_path}/bin/python3 -m pip install -e ".[dev]"',
-            f". {venv_path}/bin/activate",
-        ]
+        # Use the venv's pip directly without activation
+        logger.info("Installing package with dev dependencies")
+        run_command(f'{venv_path}/bin/pip install -e ".[dev]"')
 
-        for cmd in commands:
-            logger.info(f"Running: {cmd}")
-            run_command(cmd)
+        # Install and initialize pre-commit hooks
+        logger.info("Setting up pre-commit hooks")
+        run_command(f"{venv_path}/bin/pre-commit install")
+
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to setup virtualenv: {e}")
         # Add cleanup of partially created venv
@@ -66,13 +71,25 @@ def setup_virtualenv():
 
 def check_prerequisites():
     """Verify python version and venv module availability"""
-    if sys.version_info < (3, 8):
+    if sys.version_info < (3, 9):
         raise RuntimeError("Python 3.8+ required")
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Setup development environment for grpy-service"
+    )
+    parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Force recreation of virtualenv",
+    )
+    args = parser.parse_args()
+
     check_prerequisites()
-    setup_virtualenv()
+    setup_virtualenv(force=args.force)
     logger.info(
-        f"Virtualenv setup complete, {PROJECT_NAME} is ready run in development!"
+        f"Virtualenv setup complete!\n"
+        f"Run 'source {get_venv_path()}/bin/activate' to activate the virtualenv."
     )
