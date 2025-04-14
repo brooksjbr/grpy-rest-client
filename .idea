@@ -1,0 +1,110 @@
+# except aiohttp.ClientError as e:
+#     print(f"Network error occurred: {e}")
+# except json.JSONDecodeError as e:
+#     print(f"JSON parsing error: {e}")
+
+# Benefit: Improves reliability by automatically retrying failed requests.
+
+# Add Input Validation
+# def validate_url(self, url: str) -> str:
+#     if not url.startswith(('http://', 'https://')):
+#         raise ValueError("URL must start with http:// or https://")
+#     return url.strip("/")
+
+# async_rest_client.py
+# Benefit: Early validation prevents runtime errors and improves security.
+
+# Benefit: Safer response handling based on content type prevents parsing errors.
+
+# Implement Request Retries
+# from aiohttp import ClientSession, ClientTimeout
+# from aiohttp_retry import RetryClient
+
+# async def handle_request(self, retries=3, **kwargs):
+#     retry_client = RetryClient(client_session=self.session)
+#     response = await retry_client.request(
+#         method=self.method,
+#         url=self.url,
+#         headers=self.headers,
+#         retry_attempts=retries,
+#         **kwargs,
+#     )
+
+# async_rest_client.py
+# Benefit: Improves reliability by automatically retrying failed requests.
+
+# Benefit: Prevents requests from hanging indefinitely and provides better control over request lifecycle.
+
+# Implement Session Reuse
+# # Add session pool management
+# def __init__(self, url: str, method: str = "GET", endpoint: str = "", session: ClientSession = None):
+#     self.session = session
+#     # ... rest of init
+
+
+# async_rest_client.py
+# Benefit: Reusing sessions improves performance by avoiding connection establishment overhead.
+
+# Add Response Content Type Validation
+# async def validate_response(self, response):
+#     content_type = response.headers.get('Content-Type', '')
+#     if 'application/json' in content_type:
+#         return await response.json()
+#     return await response.text()
+
+# async_rest_client.py
+# Benefit: Safer response handling based on content type prevents parsing errors.
+
+# Implement Request Retries
+# from aiohttp import ClientSession, ClientTimeout
+# from aiohttp_retry import RetryClient
+
+# async def handle_request(self, retries=3, **kwargs):
+#     retry_client = RetryClient(client_session=self.session)
+#     response = await retry_client.request(
+#         method=self.method,
+#         url=self.url,
+#         headers=self.headers,
+#         retry_attempts=retries,
+#         **kwargs,
+#     )
+
+# async_rest_client.py
+# Benefit: Improves reliability by automatically retrying failed requests.
+
+# The Grpy REST Client is a focused Python library that provides a streamlined way to manage HTTP requests. Its core purpose is to handle REST API interactions efficiently.
+
+# Key aspects:
+
+# Primary functionality centers on making REST HTTP requests
+# Includes robust exception handling for common scenarios like:
+# Request timeouts
+# Connection errors
+# Invalid JSON responses
+# Server errors
+# The project maintains quality through:
+
+# Automated testing (shown by the Tests badge)
+# Code quality checks (shown by the Lint badge)
+# Comprehensive test coverage for error cases
+# The project follows good development practices with:
+
+# Clear setup instructions
+# Virtual environment management
+# Organized test structure
+# Proper CI/CD pipeline integration via GitHub Actions
+# It's designed to be a reliable and straightforward tool for developers who need to integrate REST API calls into their Python applications.
+
+
+# @pytest.mark.asyncio
+# async def test_request_parameters(self, mock_client_session):
+#     """Test request parameters are correctly passed"""
+#     params = {"key": "value"}
+#     headers = {"Authorization": "Bearer token"}
+#     with patch("aiohttp.ClientSession", return_value=mock_client_session):
+#         async with RestClient(TEST_URL, params=params, headers=headers) as client:
+#             client.session = mock_client_session  # Add this line to ensure mock is used
+#             await client.handle_request()
+#             mock_client_session.request.assert_called_with(
+#                 method="GET", url=TEST_URL, params=params, headers=headers
+#             )

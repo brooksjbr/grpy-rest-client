@@ -1,9 +1,9 @@
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from aiohttp import ClientSession
+from aiohttp.client import ClientSession
 
-from grpy.rest_client import RestClient
+from src.grpy.rest_client import RestClient
 
 TEST_URL = "https://api.example.com"
 TEST_ENDPOINT = "/test"
@@ -51,3 +51,13 @@ async def test_rest_client_context_manager_cleanup_with_exception(
 
         await mock_client_session.close()
         assert mock_client_session.close.called
+
+
+# @pytest.mark.asyncio
+# async def test_context_cleanup(self, mock_client_session):
+#     """Test proper resource cleanup after exceptions"""
+#     with patch("aiohttp.ClientSession", return_value=mock_client_session):
+#         with pytest.raises(Exception):
+#             async with client as session:
+#                 raise Exception("Forced error")
+#         assert client._session is None
