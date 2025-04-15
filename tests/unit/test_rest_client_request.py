@@ -13,7 +13,7 @@ TEST_URL = "https://api.example.com"
 async def rest_client(mock_client_session):
     """Fixture that provides a RestClient instance with mocked session"""
     with patch("aiohttp.ClientSession", return_value=mock_client_session):
-        async with RestClient(TEST_URL) as client:
+        async with RestClient(url=TEST_URL) as client:
             client.session = mock_client_session
             yield client
 
