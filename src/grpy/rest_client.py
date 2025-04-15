@@ -1,47 +1,84 @@
 from asyncio import TimeoutError
-from typing import AsyncContextManager, Optional
+from typing import Any, AsyncContextManager, ClassVar, Dict, Optional, Set
 from urllib.parse import urljoin
 
 from aiohttp import ClientSession, ClientTimeout
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from grpy.rest_client_base import RestClientBase
 
-
-class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
+class RestClient(BaseModel, AsyncContextManager["RestClient"]):
     """Async REST client for making HTTP requests."""
 
-    def __init__(
-        self,
-        url: str,
-        method: str = "GET",
-        endpoint: str = "",
-        timeout: Optional[float] = RestClientBase.DEFAULT_TIMEOUT,
-        session: Optional[ClientSession] = None,
-        params: Optional[dict] = None,
-        headers: Optional[dict] = None,
-    ):
-        self._validate_http_method(method)
-        self._validate_timeout(timeout)
-        self.url = url
-        self.method = method.upper()
-        self.endpoint = endpoint
-        self.headers = RestClientBase.DEFAULT_HEADERS.copy()
-        if headers:
-            self.headers.update(headers)
-        self.session = session
-        self.timeout = ClientTimeout(total=timeout)
-        self.params = params or {}
+    url: str
+    method: str = "GET"
+    endpoint: str = ""
+    timeout: Optional[float] = 60
+    session: Optional[ClientSession] = None
+    params: Dict[str, Any] = Field(default_factory=dict)
+    headers: Dict[str, str] = None
+    timeout_obj: Optional[ClientTimeout] = None  # Add this field
+
+    # Class variables need to be annotated with ClassVar
+    VALID_METHODS: ClassVar[Set[str]] = {
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "PATCH",
+        "HEAD",
+    }
+    DEFAULT_TIMEOUT: ClassVar[int] = 60
+    DEFAULT_USER_AGENT: ClassVar[str] = "grpy-rest-client/0.1.0"
+
+    DEFAULT_HEADERS: ClassVar[Dict[str, str]] = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": DEFAULT_USER_AGENT,
+    }
+
+    # Use ConfigDict instead of class Config
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if self.headers is None:
+            self.headers = self.DEFAULT_HEADERS.copy()
+        else:
+            default_headers = self.DEFAULT_HEADERS.copy()
+            default_headers.update(self.headers)
+            self.headers = default_headers
+
+        self.timeout_obj = ClientTimeout(total=self.timeout)
+
+    @field_validator("method")
+    @classmethod
+    def validate_http_method(cls, method):
+        if method.upper() not in cls.VALID_METHODS:
+            raise ValueError(
+                f"Invalid HTTP method: {method}. Valid methods are {cls.VALID_METHODS}"
+            )
+        return method.upper()
+
+    @field_validator("timeout")
+    @classmethod
+    def validate_timeout(cls, timeout):
+        if not isinstance(timeout, (int, float)) or timeout <= 0:
+            raise ValueError(
+                f"Timeout must be a positive number, got {timeout}"
+            )
+        return timeout
 
     async def __aenter__(self):
         """Enter the context manager."""
         self.session = ClientSession(
-            timeout=self.timeout, raise_for_status=True
+            timeout=self.timeout_obj, raise_for_status=True
         )
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit the context manager."""
-        await self.session.close()
+        if self.session and not self.session.closed:
+            await self.session.close()
 
     def handle_exception(method):
         async def wrapper(self, *args, **kwargs):
@@ -65,7 +102,7 @@ class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
             url=request_url,
             headers=self.headers,
             params=self.params,
-            timeout=self.timeout,
+            timeout=self.timeout_obj,
             **kwargs,
         )
 
@@ -89,6 +126,7 @@ class RestClient(RestClientBase, AsyncContextManager["RestClient"]):
         Args:
             timeout (float): New timeout value in seconds
         """
-        self.timeout = ClientTimeout(total=timeout)
+        self.timeout = timeout
+        self.timeout_obj = ClientTimeout(total=timeout)
         if self.session:
-            self.session._timeout = self.timeout
+            self.session._timeout = self.timeout_obj
