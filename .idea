@@ -108,3 +108,194 @@
 #             mock_client_session.request.assert_called_with(
 #                 method="GET", url=TEST_URL, params=params, headers=headers
 #             )
+
+# async with RestClient(
+#     url="https://app.ticketmaster.com/discovery/v2/",
+#     endpoint="events",
+#     params={"apikey": "your-api-key"},
+# ) as client:
+#     async for events in client.paginate(
+#         pagination_params={"page": 0, "size": 20},
+#         extract_data_key="_embedded.events",
+#     ):
+#         for event in events:
+#             print(f"Event: {event['name']}")
+
+# @pytest.mark.asyncio
+# async def test_paginate_with_request_kwargs(
+#     self, client_fixture, mock_response_factory
+# ):
+#     """Test pagination with additional request kwargs"""
+#     # Create response
+#     response = mock_response_factory(
+#         status=200,
+#         json_data={
+#             "page": {"number": 1, "totalPages": 1},
+#             "data": [{"id": i} for i in range(1, 11)],
+#         },
+#     )
+
+#     captured_kwargs = []
+
+#     # Create a mock for the session's request method that doesn't conflict with headers
+#     async def mock_request(method, url, **kwargs):
+#         # Capture all kwargs including method and url
+#         captured_kwargs.append({"method": method, "url": url, **kwargs})
+#         future = asyncio.Future()
+#         future.set_result(response)
+#         return future
+
+#     # Replace the client's session with our mock
+#     mock_session = MagicMock()
+#     mock_session.request = mock_request
+#     mock_session.closed = False
+
+#     # Store the original session to restore later
+#     original_session = client_fixture.session
+#     client_fixture.session = mock_session
+
+#     try:
+#         # Call the paginate method with additional kwargs
+#         # Don't include headers in request_kwargs to avoid conflict
+#         request_kwargs = {"ssl": False}
+
+#         # Instead, update the client's headers directly
+#         client_fixture.update_headers({"X-Custom-Header": "test"})
+
+#         async for _ in client_fixture.paginate(
+#             data_key="data", request_kwargs=request_kwargs
+#         ):
+#             pass
+
+#         # Verify the kwargs were passed to request
+#         assert len(captured_kwargs) == 1
+#         assert captured_kwargs[0]["method"] == "GET"  # Default method
+#         assert (
+#             captured_kwargs[0]["url"] == "https://api.example.com"
+#         )  # Base URL
+
+#         # Check that our custom headers were included
+#         assert "headers" in captured_kwargs[0]
+#         assert "X-Custom-Header" in captured_kwargs[0]["headers"]
+#         assert captured_kwargs[0]["headers"]["X-Custom-Header"] == "test"
+
+#         # Check other custom parameters
+#         assert captured_kwargs[0]["ssl"] is False
+#         assert captured_kwargs[0]["timeout"] == 30
+
+#     finally:
+#         # Restore the original session
+#         client_fixture.session = original_session
+
+
+# @pytest.mark.asyncio
+# async def test_paginate_ticketmaster_api(
+#     self, client_fixture, mock_response_factory
+# ):
+#     """Test pagination with Ticketmaster API response format"""
+#     # Mock the handle_request method to return predefined responses
+
+#     # First page response
+#     first_response = mock_response_factory(
+#         status=200,
+#         json_data={
+#             "page": {
+#                 "number": 0,
+#                 "size": 20,
+#                 "totalElements": 50,
+#                 "totalPages": 3,
+#             },
+#             "events": [{"id": f"event{i}"} for i in range(1, 21)],
+#         },
+#     )
+
+#     # Second page response
+#     second_response = mock_response_factory(
+#         status=200,
+#         json_data={
+#             "page": {
+#                 "number": 1,
+#                 "size": 20,
+#                 "totalElements": 50,
+#                 "totalPages": 3,
+#             },
+#             "events": [{"id": f"event{i}"} for i in range(21, 41)],
+#         },
+#     )
+
+#     # Third page response
+#     third_response = mock_response_factory(
+#         status=200,
+#         json_data={
+#             "page": {
+#                 "number": 2,
+#                 "size": 20,
+#                 "totalElements": 50,
+#                 "totalPages": 3,
+#             },
+#             "events": [{"id": f"event{i}"} for i in range(41, 51)],
+#         },
+#     )
+
+#     # Create a side effect that returns different responses for each call
+#     responses = [first_response, second_response, third_response]
+
+#     with patch.object(
+#         client_fixture,
+#         "handle_request",
+#         side_effect=lambda **kwargs: responses.pop(0),
+#     ):
+#         # Call the paginate method
+#         all_events = []
+#         async for page_data in client_fixture.paginate(data_key="events"):
+#             all_events.extend(page_data)
+
+#         # Verify we got all events
+#         assert len(all_events) == 50
+#         assert all_events[0]["id"] == "event1"
+#         assert all_events[49]["id"] == "event50"
+
+# @pytest.mark.asyncio
+# async def test_paginate_with_max_pages(
+#     self, client_fixture, mock_response_factory
+# ):
+#     """Test pagination with a maximum number of pages"""
+#     # Mock the handle_request method to return predefined responses
+
+#     # First page response
+#     first_response = mock_response_factory(
+#         status=200,
+#         json_data={
+#             "page": {"number": 1, "totalPages": 5},
+#             "data": [{"id": i} for i in range(1, 11)],
+#         },
+#     )
+
+#     # Second page response
+#     second_response = mock_response_factory(
+#         status=200,
+#         json_data={
+#             "page": {"number": 2, "totalPages": 5},
+#             "data": [{"id": i} for i in range(11, 21)],
+#         },
+#     )
+
+#     # Create a side effect that returns different responses for each call
+#     responses = [first_response, second_response]
+
+#     with patch.object(
+#         client_fixture,
+#         "handle_request",
+#         side_effect=lambda **kwargs: responses.pop(0),
+#     ):
+#         # Call the paginate method with max_pages=2
+#         all_data = []
+#         async for page_data in client_fixture.paginate(
+#             data_key="data", max_pages=2
+#         ):
+#             all_data.extend(page_data)
+
+#         # Verify we only got data from the first 2 pages
+#         assert len(all_data) == 20
+#         assert all_data[0]["id"] == 1
+#         assert all_data[19]["id"] == 20
