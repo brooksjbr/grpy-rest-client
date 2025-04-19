@@ -73,9 +73,7 @@ class TestRestClientValidation:
 
             # Test lowercase methods are converted to uppercase
             if method != method.lower():
-                client = RestClient(
-                    url="https://example.com", method=method.lower()
-                )
+                client = RestClient(url="https://example.com", method=method.lower())
                 assert client.method == method
 
     def test_validate_http_method_invalid(self):
@@ -128,9 +126,7 @@ class TestRestClientRequests:
 
         future.set_result(mock_response)
 
-        with patch.object(
-            ClientSession, "request", return_value=future
-        ) as mock_request:
+        with patch.object(ClientSession, "request", return_value=future) as mock_request:
             async with RestClient(url=base_url, endpoint=endpoint) as client:
                 response = await client.handle_request()
 
@@ -160,9 +156,7 @@ class TestRestClientRequests:
 
         json_data = {"name": "test", "value": 42}
 
-        with patch.object(
-            ClientSession, "request", return_value=future
-        ) as mock_request:
+        with patch.object(ClientSession, "request", return_value=future) as mock_request:
             async with RestClient(url=base_url, method="POST") as client:
                 response = await client.handle_request(json=json_data)
 
@@ -179,14 +173,40 @@ class TestRestClientRequests:
 
     @pytest.mark.asyncio
     async def test_handle_request_timeout(self, base_url):
-        async with RestClient(url=base_url) as client:
-            with pytest.raises(asyncio.TimeoutError) as excinfo:
-                await client.handle_request()
+        """Test that timeout errors are properly handled"""
+        # Create a client
+        client = RestClient(url=base_url)
 
-            assert "Request timed out" in str(excinfo.value)
+        # Create a mock session
+        mock_session = MagicMock()
+
+        # Configure the mock session to raise a timeout error
+        async def mock_request(*args, **kwargs):
+            raise asyncio.TimeoutError("Connection timed out")
+
+        mock_session.request = mock_request
+        mock_session.closed = False
+
+        # Set the mock session directly on the client
+        client.session = mock_session
+
+        # Test the handle_request method
+        with pytest.raises(asyncio.TimeoutError) as excinfo:
+            await client.handle_request()
+
+        # Verify the error message
+        assert "Request timed out" in str(excinfo.value)
 
     @pytest.mark.asyncio
     async def test_handle_request_error(self, base_url):
+        """Test that HTTP errors are properly handled"""
+        # Create a client
+        client = RestClient(url=base_url)
+
+        # Create a mock session
+        mock_session = MagicMock()
+
+        # Create an error to be raised
         error = ClientResponseError(
             request_info=MagicMock(),
             history=(),
@@ -194,11 +214,22 @@ class TestRestClientRequests:
             message="Not Found",
         )
 
-        async with RestClient(url=base_url) as client:
-            with pytest.raises(ClientResponseError) as excinfo:
-                await client.handle_request()
+        # Configure the mock session to raise the error
+        async def mock_request(*args, **kwargs):
+            raise error
 
-            assert excinfo.value == error
+        mock_session.request = mock_request
+        mock_session.closed = False
+
+        # Set the mock session directly on the client
+        client.session = mock_session
+
+        # Test the handle_request method
+        with pytest.raises(ClientResponseError) as excinfo:
+            await client.handle_request()
+
+        # Verify the error
+        assert excinfo.value == error
 
 
 class TestRestClientUtilities:

@@ -49,14 +49,14 @@ only-include = ["src"]
 sources = ["src"]
 
 [tool.black]
-line-length = 80
+line-length = 100
 target-version = ['py39']
 include = '\.pyi?$'
 
 [tool.isort]
 profile = "black"
 multi_line_output = 3
-line_length = 88
+line_length = 100
 include_trailing_comma = true
 force_grid_wrap = 0
 use_parentheses = true
