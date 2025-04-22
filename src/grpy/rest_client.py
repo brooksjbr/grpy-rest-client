@@ -1,10 +1,12 @@
 from asyncio import TimeoutError
-from typing import Any, AsyncContextManager, ClassVar, Dict, Optional, Set
+from typing import Any, AsyncContextManager, ClassVar, Dict, Optional, Set, Type
 from urllib.parse import urljoin
 
 from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 from aiohttp import ContentTypeError as AiohttpContentTypeError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .pagination import HateoasPaginationStrategy, PageNumberPaginationStrategy, PaginationStrategy
 
 
 class RestClientError(Exception):
@@ -118,7 +120,8 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
     session: Optional[ClientSession] = None
     params: Dict[str, Any] = Field(default_factory=dict)
     headers: Dict[str, str] = None
-    timeout_obj: Optional[ClientTimeout] = None  # Add this field
+    timeout_obj: Optional[ClientTimeout] = None
+    pagination_strategy: Optional[PaginationStrategy] = None
 
     # Class variables need to be annotated with ClassVar
     VALID_METHODS: ClassVar[Set[str]] = {
@@ -138,6 +141,12 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         "User-Agent": DEFAULT_USER_AGENT,
     }
 
+    # Available pagination strategies
+    PAGINATION_STRATEGIES: ClassVar[Dict[str, Type[PaginationStrategy]]] = {
+        "page_number": PageNumberPaginationStrategy,
+        "hateoas": HateoasPaginationStrategy,
+    }
+
     # Use ConfigDict instead of class Config
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -151,6 +160,10 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             self.headers = default_headers
 
         self.timeout_obj = ClientTimeout(total=self.timeout)
+
+        # Default to HATEOAS pagination strategy if none is provided
+        if self.pagination_strategy is None:
+            self.pagination_strategy = HateoasPaginationStrategy()
 
     @field_validator("method")
     @classmethod
@@ -217,9 +230,34 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         if self.session:
             self.session._timeout = self.timeout_obj
 
+    def set_pagination_strategy(
+        self, strategy_name: str = None, strategy: PaginationStrategy = None
+    ):
+        """Set the pagination strategy to use.
+
+        Args:
+            strategy_name: Name of a built-in strategy ('page_number' or 'hateoas')
+            strategy: Custom PaginationStrategy instance
+
+        Raises:
+            ValueError: If neither strategy_name nor strategy is provided, or if
+                        strategy_name is not a valid built-in strategy
+        """
+        if strategy is not None:
+            self.pagination_strategy = strategy
+        elif strategy_name is not None:
+            if strategy_name not in self.PAGINATION_STRATEGIES:
+                raise ValueError(
+                    f"Invalid pagination strategy: {strategy_name}. "
+                    f"Valid strategies are {list(self.PAGINATION_STRATEGIES.keys())}"
+                )
+            self.pagination_strategy = self.PAGINATION_STRATEGIES[strategy_name]()
+        else:
+            raise ValueError("Either strategy_name or strategy must be provided")
+
     async def paginate(self, data_key=None, max_pages=None, request_kwargs=None):
         """
-        Paginate through API results.
+        Paginate through API results using the configured pagination strategy.
 
         Args:
             data_key (str, optional): The key in the response that contains the data items.
@@ -228,7 +266,13 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
 
         Yields:
             list: The data items from each page.
+
+        Raises:
+            ValueError: If no pagination strategy is configured
         """
+        if self.pagination_strategy is None:
+            raise ValueError("No pagination strategy configured")
+
         page_count = 0
         current_params = self.params.copy()
         request_kwargs = request_kwargs or {}
@@ -245,11 +289,8 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             response = await self.handle_request(**request_kwargs)
             response_json = await response.json()
 
-            # Extract the data from the response
-            if data_key is not None:
-                data_items = response_json.get(data_key, [])
-            else:
-                data_items = response_json
+            # Extract the data from the response using the pagination strategy
+            data_items = self.pagination_strategy.extract_data(response_json, data_key)
 
             # Yield the data items from this page
             yield data_items
@@ -258,128 +299,12 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             page_count += 1
 
             # Determine if there are more pages and what the next page parameters should be
-            has_more, next_params = self._get_next_page_info(response_json, current_params)
+            has_more, next_params = self.pagination_strategy.get_next_page_info(
+                response_json, current_params
+            )
 
             if not has_more:
                 break
 
             # Update the parameters for the next page
             current_params = next_params
-
-    def _extract_page_data(
-        self,
-        response_json: Dict[str, Any],
-        extract_data_key: Optional[str] = None,
-    ):
-        """Extract the relevant data from a page response.
-
-        Args:
-            response_json: The JSON response from the API
-            extract_data_key: Path to the data to extract (e.g., '_embedded.events')
-
-        Returns:
-            The extracted data or the full response
-        """
-        if not extract_data_key:
-            return response_json
-
-        # Handle nested keys with dot notation (e.g., '_embedded.events')
-        keys = extract_data_key.split(".")
-        data = response_json
-
-        for key in keys:
-            if key in data:
-                data = data[key]
-            else:
-                # If key doesn't exist, return the full response
-                return response_json
-
-        return data
-
-    def _get_next_page_info(self, response_json, current_params):
-        """
-        Determine if there are more pages and what the next page parameters should be.
-
-        Handles different pagination patterns:
-        1. Page number/totalPages structure
-        2. _links.next structure (HATEOAS style)
-
-        Args:
-            response_json: The JSON response from the API
-            current_params: The current request parameters
-
-        Returns:
-            Tuple[bool, dict]: A tuple containing:
-                - has_more: Boolean indicating if there are more pages
-                - next_params: Dictionary of parameters for the next page request
-        """
-        # Create a copy of the current parameters to modify
-        next_params = current_params.copy()
-
-        # Check for HATEOAS-style _links.next structure
-        if "_links" in response_json and "next" in response_json["_links"]:
-            # Extract the next page URL from the HATEOAS link
-            next_href = response_json["_links"]["next"].get("href", "")
-
-            # If there's a next link, there are more pages
-            has_more = bool(next_href)
-
-            if has_more and "page=" in next_href:
-                # Extract the page number from the URL
-                page_param = next_href.split("page=")[1].split("&")[0]
-                next_params["page"] = page_param  # Keep as string as it comes from URL
-
-            return has_more, next_params
-
-        # Extract pagination information from the response
-        page_info = response_json.get("page", {})
-        current_page = page_info.get("number")
-        total_pages = page_info.get("totalPages")
-
-        # Determine if there are more pages based on page numbers
-        has_more = False
-        if current_page is not None and total_pages is not None:
-            # Get the current page from parameters if available
-            param_page = current_params.get("page")
-
-            # Use the page from parameters if it exists, otherwise use the one from response
-            effective_current_page = param_page if param_page is not None else current_page
-
-            # There are more pages if the current page is less than total pages
-            has_more = int(effective_current_page) < total_pages
-
-            # If there are more pages, update the page parameter for the next request
-            if has_more:
-                next_params["page"] = int(effective_current_page) + 1
-
-        return has_more, next_params
-
-    def _update_params_from_links(
-        self, next_link: Dict[str, Any], current_params: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Extract pagination parameters from a HATEOAS-style 'next' link.
-
-        Args:
-            next_link: The 'next' link object from the response
-            current_params: Current pagination parameters
-
-        Returns:
-            Updated pagination parameters
-        """
-        # Handle Ticketmaster-style links which may contain a 'href' with query parameters
-        if "href" in next_link:
-            from urllib.parse import parse_qs, urlparse
-
-            # Parse the URL to extract query parameters
-            parsed_url = urlparse(next_link["href"])
-            query_params = parse_qs(parsed_url.query)
-
-            # Convert query params (which are lists) to single values
-            next_params = current_params.copy()
-            for key, value_list in query_params.items():
-                if value_list:  # Only update if there's a value
-                    next_params[key] = value_list[0]
-
-            return next_params
-
-        return current_params
