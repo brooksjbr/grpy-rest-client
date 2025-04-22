@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import urljoin
 
 import pytest
@@ -206,17 +206,14 @@ class TestRestClientRequests:
         # Create a mock session
         mock_session = MagicMock()
 
-        # Create an error to be raised
-        error = ClientResponseError(
-            request_info=MagicMock(),
-            history=(),
-            status=404,
-            message="Not Found",
-        )
+        # Create a mock response with 404 status
+        mock_response = MagicMock()
+        mock_response.status = 404
+        mock_response.text = AsyncMock(return_value="Not Found")
 
-        # Configure the mock session to raise the error
+        # Configure the mock session to return the mock response
         async def mock_request(*args, **kwargs):
-            raise error
+            return mock_response
 
         mock_session.request = mock_request
         mock_session.closed = False
@@ -228,8 +225,8 @@ class TestRestClientRequests:
         with pytest.raises(ClientResponseError) as excinfo:
             await client.handle_request()
 
-        # Verify the error
-        assert excinfo.value == error
+        # Verify the error message contains the expected text
+        assert "Resource not found" in str(excinfo.value)
 
 
 class TestRestClientUtilities:

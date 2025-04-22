@@ -2,8 +2,110 @@ from asyncio import TimeoutError
 from typing import Any, AsyncContextManager, ClassVar, Dict, Optional, Set
 from urllib.parse import urljoin
 
-from aiohttp import ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
+from aiohttp import ContentTypeError as AiohttpContentTypeError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class RestClientError(Exception):
+    """Base exception for REST client errors."""
+
+    pass
+
+
+class ServerError(RestClientError):
+    """Exception for 5xx server errors."""
+
+    pass
+
+
+class AuthenticationError(ClientError):
+    """Exception for 401 authentication errors."""
+
+    pass
+
+
+class ForbiddenError(ClientError):
+    """Exception for 403 forbidden errors."""
+
+    pass
+
+
+class RateLimitError(ClientError):
+    """Exception for 429 rate limit errors."""
+
+    pass
+
+
+class ContentTypeError(RestClientError):
+    """Exception for content type errors."""
+
+    pass
+
+
+def handle_exception(method):
+    async def wrapper(self, *args, **kwargs):
+        try:
+            response = await method(self, *args, **kwargs)
+
+            # Check status codes
+            if 400 <= response.status < 500:
+                error_text = await response.text()
+                if response.status == 401:
+                    raise ClientResponseError(
+                        request_info=response.request_info,
+                        history=response.history,
+                        status=401,
+                        message=f"Authentication required: {error_text}",
+                    )
+                elif response.status == 403:
+                    raise ClientResponseError(
+                        request_info=response.request_info,
+                        history=response.history,
+                        status=403,
+                        message=f"Access forbidden: {error_text}",
+                    )
+                elif response.status == 404:
+                    raise ClientResponseError(
+                        request_info=response.request_info,
+                        history=response.history,
+                        status=404,
+                        message=f"Resource not found: {error_text}",
+                    )
+                elif response.status == 429:
+                    raise ClientResponseError(
+                        request_info=response.request_info,
+                        history=response.history,
+                        status=429,
+                        message=f"Rate limit exceeded: {error_text}",
+                    )
+                else:
+                    raise ClientResponseError(
+                        request_info=response.request_info,
+                        history=response.history,
+                        status=response.status,
+                        message=f"Client error: {error_text}",
+                    )
+
+            elif 500 <= response.status < 600:
+                error_text = await response.text()
+                raise ServerError(f"Server error {response.status}: {error_text}")
+
+            return response
+
+        except TimeoutError as e:
+            raise TimeoutError(f"Request timed out: {e}") from e
+        except ClientResponseError:
+            # Re-raise ClientResponseError exceptions
+            raise
+        except AiohttpContentTypeError as e:
+            raise AiohttpContentTypeError(f"Content type error: {e}") from e
+        except Exception as exc:
+            raise ClientResponseError(
+                request_info=None, history=None, status=0, message=f"Unexpected error: {exc}"
+            ) from exc
+
+    return wrapper
 
 
 class RestClient(BaseModel, AsyncContextManager["RestClient"]):
@@ -76,17 +178,6 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         """Async context manager exit point."""
         if self.session and not self.session.closed:
             await self.session.close()
-
-    def handle_exception(method):
-        async def wrapper(self, *args, **kwargs):
-            try:
-                return await method(self, *args, **kwargs)
-            except TimeoutError as e:
-                raise TimeoutError(f"Request timed out: {e}") from e
-            except Exception as exc:
-                raise exc from exc
-
-        return wrapper
 
     @handle_exception
     async def handle_request(self, **kwargs):
