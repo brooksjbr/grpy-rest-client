@@ -299,3 +299,80 @@
 #         assert len(all_data) == 20
 #         assert all_data[0]["id"] == 1
 #         assert all_data[19]["id"] == 20
+
+
+# 2. Inconsistent Pagination Implementation
+# The pagination logic is complex with multiple methods (paginate, _extract_page_data, _get_next_page_info, _update_params_from_links) that have overlapping functionality. The _extract_page_data method is defined but never used.
+
+# Consider refactoring the pagination system into a strategy pattern where different pagination strategies can be plugged in based on the API being used.
+
+# Benefit: Cleaner separation of concerns and easier maintenance when supporting multiple pagination styles.
+
+# 3. Resource Management
+# The client creates a new session if one isn't provided, but there's no guarantee it will be properly closed if the context manager isn't used.
+
+# def __del__(self):
+#     """Ensure session is closed when object is garbage collected."""
+#     if hasattr(self, 'session') and self.session and not self.session.closed:
+#         import asyncio
+#         try:
+#             loop = asyncio.get_event_loop()
+#             if loop.is_running():
+#                 loop.create_task(self.session.close())
+#             else:
+#                 loop.run_until_complete(self.session.close())
+#         except Exception:
+#             pass  # Best effort cleanup
+
+# Copy
+
+
+# rest_client.py
+# Benefit: Prevents resource leaks when the client isn't used as a context manager.
+
+# 4. Lack of Request Body Handling
+# The client doesn't have a dedicated field for request body data, which is essential for POST/PUT/PATCH requests.
+
+# # Add to class definition
+# json_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
+# data: Optional[Any] = None
+
+# # Then update handle_request to include these
+# @handle_exception
+# async def handle_request(self, **kwargs):
+#     if self.json_data and 'json' not in kwargs:
+#         kwargs['json'] = self.json_data
+#     if self.data and 'data' not in kwargs:
+#         kwargs['data'] = self.data
+
+#     response = await self.session.request(...)
+
+# Copy
+
+
+# rest_client.py
+# Benefit: More convenient API for common REST operations that require request bodies.
+
+# 5. Lack of Type Annotations in Method Parameters
+# While the class fields have type annotations, method parameters often don't, which reduces IDE assistance and static type checking benefits.
+
+# # Example improvement
+# async def paginate(
+#     self,
+#     data_key: Optional[str] = None,
+#     max_pages: Optional[int] = None,
+#     request_kwargs: Optional[Dict[str, Any]] = None
+# ) -> AsyncIterator[List[Any]]:
+
+# Copy
+
+
+# rest_client.py
+# Benefit: Better IDE support, static type checking, and self-documentation.
+
+# Summary
+# The RestClient implementation generally follows good design principles with a clean async interface and separation of concerns. The code is well-structured with appropriate use of Python's modern features like Pydantic models and async context managers.
+
+# The main opportunities for improvement are around error handling, resource management, and making the API more intuitive for common REST operations. The pagination system could also benefit from refactoring to make it more maintainable and flexible.
+
+# Overall, these improvements would make the client more robust and easier to use correctly, especially for developers who aren't familiar with the codebase.
