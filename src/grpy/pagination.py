@@ -103,3 +103,61 @@ class PageNumberPaginationStrategy(PaginationStrategy):
                 next_params["page"] = int(effective_current_page) + 1
 
         return has_more, next_params
+
+
+class HateoasPaginationStrategy(PaginationStrategy):
+    """Pagination strategy for APIs that use HATEOAS links.
+
+    This strategy handles APIs that follow HATEOAS principles by including
+    navigation links in the response, typically in a "_links" object.
+    """
+
+    def extract_data(self, response_json: Dict[str, Any], data_key: Optional[str] = None) -> Any:
+        """Extract data from response using the specified data key."""
+        if not data_key:
+            return response_json
+
+        # Handle nested keys with dot notation (e.g., '_embedded.events')
+        keys = data_key.split(".")
+        data = response_json
+
+        for key in keys:
+            if isinstance(data, dict) and key in data:
+                data = data[key]
+            else:
+                # If key doesn't exist, return the full response
+                return response_json
+
+        return data
+
+    def get_next_page_info(
+        self, response_json: Dict[str, Any], current_params: Dict[str, Any]
+    ) -> Tuple[bool, Dict[str, Any]]:
+        """Check if there are more pages based on HATEOAS links."""
+        next_params = current_params.copy()
+
+        # Check for HATEOAS-style _links.next structure
+        if "_links" in response_json and "next" in response_json["_links"]:
+            # Extract the next page URL from the HATEOAS link
+            next_link = response_json["_links"]["next"]
+            next_href = next_link.get("href", "")
+
+            # If there's a next link, there are more pages
+            has_more = bool(next_href)
+
+            if has_more:
+                # Extract parameters from the next link
+                from urllib.parse import parse_qs, urlparse
+
+                # Parse the URL to extract query parameters
+                parsed_url = urlparse(next_href)
+                query_params = parse_qs(parsed_url.query)
+
+                # Convert query params (which are lists) to single values
+                for key, value_list in query_params.items():
+                    if value_list:  # Only update if there's a value
+                        next_params[key] = value_list[0]
+
+            return has_more, next_params
+
+        return False, next_params
