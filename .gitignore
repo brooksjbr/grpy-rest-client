@@ -50,6 +50,3 @@ wheels/
 # Distribution
 dist/
 build/
-
-#Files
-.idea
