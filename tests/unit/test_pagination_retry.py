@@ -74,7 +74,7 @@ class TestPageNumberPaginationStrategyRetry:
     """Tests for retry functionality in PageNumberPaginationStrategy."""
 
     @pytest.mark.asyncio
-    async def test_page_number_strategy_with_retry_success(self):
+    async def test_page_number_strategy_with_retry_success(self, pagination_strategy_factory):
         """Test PageNumberPaginationStrategy with successful retry."""
         # Create a mock function that fails once then succeeds
         mock_func = AsyncMock(
@@ -96,7 +96,7 @@ class TestPageNumberPaginationStrategyRetry:
         assert mock_func.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_page_number_strategy_with_retry_failure(self):
+    async def test_page_number_strategy_with_retry_failure(self, pagination_strategy_factory):
         """Test PageNumberPaginationStrategy with failed retries."""
         # Create a mock function that always fails
         error = aiohttp.ClientError("Persistent network error")
@@ -117,7 +117,7 @@ class TestHateoasPaginationStrategyRetry:
     """Tests for retry functionality in HateoasPaginationStrategy."""
 
     @pytest.mark.asyncio
-    async def test_hateoas_strategy_with_retry_success(self):
+    async def test_hateoas_strategy_with_retry_success(self, pagination_strategy_factory):
         """Test HateoasPaginationStrategy with successful retry."""
         # Create a mock function that fails once then succeeds
         mock_func = AsyncMock(
@@ -145,12 +145,7 @@ class TestHateoasPaginationStrategyRetry:
     @pytest.mark.asyncio
     async def test_hateoas_strategy_with_retryable_status_code(self):
         """Test HateoasPaginationStrategy with retryable status code."""
-        # Create mock responses
-        mock_response_503 = MagicMock(spec=aiohttp.ClientResponse)
-        mock_response_503.status = 503
-        mock_response_503.request_info = MagicMock()
-        mock_response_503.history = ()
-
+        # Create success response
         success_response = {
             "_links": {
                 "self": {"href": "https://api.example.com/items?page=1"},
@@ -159,15 +154,30 @@ class TestHateoasPaginationStrategyRetry:
             "items": ["item1", "item2"],
         }
 
-        # Create a mock function that returns a 503 response then succeeds
-        mock_func = AsyncMock(side_effect=[mock_response_503, success_response])
+        # Create a counter to track calls and control behavior
+        call_count = 0
+
+        async def mock_function():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call - raise a 503 error
+                raise aiohttp.ClientResponseError(
+                    request_info=MagicMock(),
+                    history=(),
+                    status=503,
+                    message="Service Unavailable",
+                    headers={},
+                )
+            # Second call - return success
+            return success_response
 
         # Create the strategy with fast retry settings for testing
         strategy = HateoasPaginationStrategy(max_retries=2, initial_delay=0.01, jitter=False)
 
         # Execute with retry
-        result = await strategy.execute_with_retry(mock_func)
+        result = await strategy.execute_with_retry(mock_function)
 
         # Verify the result
         assert result == success_response
-        assert mock_func.call_count == 2
+        assert call_count == 2  # Verify the function was called twice
