@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 import pytest
 from aiohttp import ClientSession
 
-from grpy.rest_client import RestClient
-from grpy.retry import ExponentialBackoffRetry
+from src.grpy.rest_client import RestClient
+from src.grpy.retry import ExponentialBackoffRetry
 
 
 @pytest.fixture

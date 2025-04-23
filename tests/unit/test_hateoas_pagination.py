@@ -5,75 +5,9 @@ from src.grpy.pagination import HateoasPaginationStrategy
 
 class TestHateoasPaginationStrategy:
     @pytest.fixture
-    def strategy(self):
+    def strategy(self, pagination_strategy_factory):
         """Create a HateoasPaginationStrategy instance for testing."""
-        return HateoasPaginationStrategy()
-
-    @pytest.fixture
-    def hateoas_page1_response(self):
-        """Sample response for first page with HATEOAS links."""
-        return {
-            "_embedded": {
-                "events": [
-                    {"id": "event1", "name": "Concert 1"},
-                    {"id": "event2", "name": "Concert 2"},
-                ]
-            },
-            "_links": {
-                "self": {"href": "/events?page=0&size=2"},
-                "next": {"href": "/events?page=1&size=2"},
-            },
-            "page": {
-                "size": 2,
-                "totalElements": 5,
-                "totalPages": 3,
-                "number": 0,
-            },
-        }
-
-    @pytest.fixture
-    def hateoas_page2_response(self):
-        """Sample response for middle page with HATEOAS links."""
-        return {
-            "_embedded": {
-                "events": [
-                    {"id": "event3", "name": "Concert 3"},
-                    {"id": "event4", "name": "Concert 4"},
-                ]
-            },
-            "_links": {
-                "self": {"href": "/events?page=1&size=2"},
-                "next": {"href": "/events?page=2&size=2"},
-                "prev": {"href": "/events?page=0&size=2"},
-            },
-            "page": {
-                "size": 2,
-                "totalElements": 5,
-                "totalPages": 3,
-                "number": 1,
-            },
-        }
-
-    @pytest.fixture
-    def hateoas_last_page_response(self):
-        """Sample response for last page with HATEOAS links."""
-        return {
-            "_embedded": {
-                "events": [
-                    {"id": "event5", "name": "Concert 5"},
-                ]
-            },
-            "_links": {
-                "self": {"href": "/events?page=2&size=2"},
-                "prev": {"href": "/events?page=1&size=2"},
-            },
-            "page": {
-                "size": 2,
-                "totalElements": 5,
-                "totalPages": 3,
-                "number": 2,
-            },
-        }
+        return pagination_strategy_factory(HateoasPaginationStrategy)
 
     @pytest.fixture
     def hateoas_with_query_params_response(self):
