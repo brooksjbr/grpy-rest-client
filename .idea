@@ -301,35 +301,6 @@
 #         assert all_data[19]["id"] == 20
 
 
-# 2. Inconsistent Pagination Implementation
-# The pagination logic is complex with multiple methods (paginate, _extract_page_data, _get_next_page_info, _update_params_from_links) that have overlapping functionality. The _extract_page_data method is defined but never used.
-
-# Consider refactoring the pagination system into a strategy pattern where different pagination strategies can be plugged in based on the API being used.
-
-# Benefit: Cleaner separation of concerns and easier maintenance when supporting multiple pagination styles.
-
-# 3. Resource Management
-# The client creates a new session if one isn't provided, but there's no guarantee it will be properly closed if the context manager isn't used.
-
-# def __del__(self):
-#     """Ensure session is closed when object is garbage collected."""
-#     if hasattr(self, 'session') and self.session and not self.session.closed:
-#         import asyncio
-#         try:
-#             loop = asyncio.get_event_loop()
-#             if loop.is_running():
-#                 loop.create_task(self.session.close())
-#             else:
-#                 loop.run_until_complete(self.session.close())
-#         except Exception:
-#             pass  # Best effort cleanup
-
-# Copy
-
-
-# rest_client.py
-# Benefit: Prevents resource leaks when the client isn't used as a context manager.
-
 # 4. Lack of Request Body Handling
 # The client doesn't have a dedicated field for request body data, which is essential for POST/PUT/PATCH requests.
 
