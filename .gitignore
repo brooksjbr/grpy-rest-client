@@ -51,5 +51,4 @@ wheels/
 dist/
 build/
 
-#Files
 .idea
