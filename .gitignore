@@ -50,3 +50,5 @@ wheels/
 # Distribution
 dist/
 build/
+
+.idea

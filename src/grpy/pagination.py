@@ -1,7 +1,9 @@
 """Pagination strategies for REST API clients."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
+
+from .retry import ExponentialBackoffRetry, RetryStrategy
 
 
 class PaginationStrategy(ABC):
@@ -11,6 +13,39 @@ class PaginationStrategy(ABC):
     Different APIs use different pagination mechanisms (page numbers, cursors, HATEOAS links),
     and this strategy pattern allows for pluggable pagination handling.
     """
+
+    def __init__(
+        self,
+        retry_strategy: Optional[RetryStrategy] = None,
+        max_retries: int = 3,
+        initial_delay: float = 0.5,
+        max_delay: float = 30.0,
+        backoff_factor: float = 2.0,
+        jitter: bool = True,
+        retryable_exceptions: Optional[List[Type[Exception]]] = None,
+        retryable_status_codes: Optional[List[int]] = None,
+    ):
+        """Initialize the pagination strategy with retry configuration.
+
+        Args:
+            retry_strategy: Custom retry strategy to use
+            max_retries: Maximum number of retry attempts
+            initial_delay: Initial delay in seconds
+            max_delay: Maximum delay in seconds
+            backoff_factor: Factor by which the delay increases
+            jitter: Whether to add randomness to the delay
+            retryable_exceptions: List of exception types that should trigger a retry
+            retryable_status_codes: List of HTTP status codes that should trigger a retry
+        """
+        self.retry_strategy = retry_strategy or ExponentialBackoffRetry(
+            max_retries=max_retries,
+            initial_delay=initial_delay,
+            max_delay=max_delay,
+            backoff_factor=backoff_factor,
+            jitter=jitter,
+            retryable_exceptions=retryable_exceptions,
+            retryable_status_codes=retryable_status_codes,
+        )
 
     @abstractmethod
     def extract_data(self, response_json: Dict[str, Any], data_key: Optional[str] = None) -> Any:
@@ -41,6 +76,19 @@ class PaginationStrategy(ABC):
                 - Dictionary of parameters for the next page request
         """
         pass
+
+    async def execute_with_retry(self, func, *args, **kwargs):
+        """Execute a function with retry logic.
+
+        Args:
+            func: The function to execute
+            *args: Positional arguments to pass to the function
+            **kwargs: Keyword arguments to pass to the function
+
+        Returns:
+            The result of the function execution
+        """
+        return await self.retry_strategy.execute_with_retry(func, *args, **kwargs)
 
 
 class PageNumberPaginationStrategy(PaginationStrategy):
