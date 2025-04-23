@@ -1,3 +1,4 @@
+import asyncio
 from asyncio import TimeoutError
 from typing import Any, AsyncContextManager, ClassVar, Dict, Optional, Set, Type
 from urllib.parse import urljoin
@@ -165,6 +166,37 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         if self.pagination_strategy is None:
             self.pagination_strategy = HateoasPaginationStrategy()
 
+    async def __aenter__(self):
+        """Async context manager entry point."""
+        if self.session is None:
+            self.session = ClientSession()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit point."""
+        await self.close()
+
+    def __del__(self):
+        """Ensure session is closed when object is garbage collected."""
+        if hasattr(self, "session") and self.session and not self.session.closed:
+            import warnings
+
+            warnings.warn(
+                "RestClient was garbage collected with an open session. "
+                "Please use 'async with' context manager or explicitly call 'await client.close()' "
+                "to ensure proper resource cleanup.",
+                ResourceWarning,
+                stacklevel=2,
+            )
+
+            # Schedule the session for closing if possible
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self.session.close())
+            except Exception:
+                pass  # Best effort cleanup
+
     @field_validator("method")
     @classmethod
     def validate_http_method(cls, method):
@@ -181,16 +213,11 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             raise ValueError(f"Timeout must be a positive number, got {timeout}")
         return timeout
 
-    async def __aenter__(self):
-        """Async context manager entry point."""
-        if self.session is None:
-            self.session = ClientSession()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit point."""
+    async def close(self):
+        """Explicitly close the session."""
         if self.session and not self.session.closed:
             await self.session.close()
+            self.session = None
 
     @handle_exception
     async def handle_request(self, **kwargs):

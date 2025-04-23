@@ -103,12 +103,14 @@ class TestRestClientValidation:
 class TestRestClientContextManager:
     @pytest.mark.asyncio
     async def test_context_manager(self, base_url):
+        session = None
         async with RestClient(url=base_url) as client:
             assert client.session is not None
             assert not client.session.closed
+            session = client.session
 
         # After exiting context, session should be closed
-        assert client.session.closed
+        assert session.closed
 
 
 class TestRestClientRequests:
