@@ -301,29 +301,6 @@
 #         assert all_data[19]["id"] == 20
 
 
-# 4. Lack of Request Body Handling
-# The client doesn't have a dedicated field for request body data, which is essential for POST/PUT/PATCH requests.
-
-# # Add to class definition
-# json_data: Optional[Dict[str, Any]] = Field(default_factory=dict)
-# data: Optional[Any] = None
-
-# # Then update handle_request to include these
-# @handle_exception
-# async def handle_request(self, **kwargs):
-#     if self.json_data and 'json' not in kwargs:
-#         kwargs['json'] = self.json_data
-#     if self.data and 'data' not in kwargs:
-#         kwargs['data'] = self.data
-
-#     response = await self.session.request(...)
-
-# Copy
-
-
-# rest_client.py
-# Benefit: More convenient API for common REST operations that require request bodies.
-
 # 5. Lack of Type Annotations in Method Parameters
 # While the class fields have type annotations, method parameters often don't, which reduces IDE assistance and static type checking benefits.
 

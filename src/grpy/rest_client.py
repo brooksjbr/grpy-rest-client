@@ -1,9 +1,20 @@
 import asyncio
 from asyncio import TimeoutError
-from typing import Any, AsyncContextManager, ClassVar, Dict, Optional, Set, Type
+from typing import (
+    Any,
+    AsyncContextManager,
+    AsyncIterator,
+    ClassVar,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Type,
+    Union,
+)
 from urllib.parse import urljoin
 
-from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientResponse, ClientResponseError, ClientSession, ClientTimeout
 from aiohttp import ContentTypeError as AiohttpContentTypeError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -167,17 +178,22 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         if self.pagination_strategy is None:
             self.pagination_strategy = HateoasPaginationStrategy()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "RestClient":
         """Async context manager entry point."""
         if self.session is None:
             self.session = ClientSession()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> None:
         """Async context manager exit point."""
         await self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Ensure session is closed when object is garbage collected."""
         if hasattr(self, "session") and self.session and not self.session.closed:
             import warnings
@@ -200,7 +216,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
 
     @field_validator("method")
     @classmethod
-    def validate_http_method(cls, method):
+    def validate_http_method(cls, method: str) -> str:
         if method.upper() not in cls.VALID_METHODS:
             raise ValueError(
                 f"Invalid HTTP method: {method}. Valid methods are {cls.VALID_METHODS}"
@@ -209,19 +225,19 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
 
     @field_validator("timeout")
     @classmethod
-    def validate_timeout(cls, timeout):
+    def validate_timeout(cls, timeout: Union[int, float]) -> Union[int, float]:
         if not isinstance(timeout, (int, float)) or timeout <= 0:
             raise ValueError(f"Timeout must be a positive number, got {timeout}")
         return timeout
 
-    async def close(self):
+    async def close(self) -> None:
         """Explicitly close the session."""
         if self.session and not self.session.closed:
             await self.session.close()
             self.session = None
 
     @handle_exception
-    async def handle_request(self, **kwargs):
+    async def handle_request(self, **kwargs) -> ClientResponse:
         """Make a REST request with specified parameters."""
         request_url = urljoin(self.url, self.endpoint) if self.endpoint else self.url
 
@@ -240,11 +256,11 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
 
         return response
 
-    def update_headers(self, headers: dict):
+    def update_headers(self, headers: Dict[str, str]) -> None:
         """Update headers for the request."""
         self.headers.update(headers)
 
-    def update_params(self, params: dict):
+    def update_params(self, params: Dict[str, Any]) -> None:
         """Update request parameters.
 
         Args:
@@ -252,7 +268,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         """
         self.params.update(params)
 
-    def update_timeout(self, timeout: float):
+    def update_timeout(self, timeout: float) -> None:
         """Update the client timeout value.
 
         Args:
@@ -263,7 +279,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         if self.session:
             self.session._timeout = self.timeout_obj
 
-    def update_data(self, data: Dict[str, Any]):
+    def update_data(self, data: Dict[str, Any]) -> None:
         """Update request data for POST/PUT/PATCH requests.
 
         Args:
@@ -274,8 +290,8 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         self.data.update(data)
 
     def set_pagination_strategy(
-        self, strategy_name: str = None, strategy: PaginationStrategy = None
-    ):
+        self, strategy_name: Optional[str] = None, strategy: Optional[PaginationStrategy] = None
+    ) -> None:
         """Set the pagination strategy to use.
 
         Args:
@@ -298,7 +314,12 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         else:
             raise ValueError("Either strategy_name or strategy must be provided")
 
-    async def paginate(self, data_key=None, max_pages=None, request_kwargs=None):
+    async def paginate(
+        self,
+        data_key: Optional[str] = None,
+        max_pages: Optional[int] = None,
+        request_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
         """
         Paginate through API results using the configured pagination strategy.
 
