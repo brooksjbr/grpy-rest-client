@@ -65,41 +65,24 @@ def handle_exception(method):
             # Check status codes
             if 400 <= response.status < 500:
                 error_text = await response.text()
-                if response.status == 401:
-                    raise ClientResponseError(
-                        request_info=response.request_info,
-                        history=response.history,
-                        status=401,
-                        message=f"Authentication required: {error_text}",
-                    )
-                elif response.status == 403:
-                    raise ClientResponseError(
-                        request_info=response.request_info,
-                        history=response.history,
-                        status=403,
-                        message=f"Access forbidden: {error_text}",
-                    )
-                elif response.status == 404:
-                    raise ClientResponseError(
-                        request_info=response.request_info,
-                        history=response.history,
-                        status=404,
-                        message=f"Resource not found: {error_text}",
-                    )
-                elif response.status == 429:
-                    raise ClientResponseError(
-                        request_info=response.request_info,
-                        history=response.history,
-                        status=429,
-                        message=f"Rate limit exceeded: {error_text}",
-                    )
-                else:
-                    raise ClientResponseError(
-                        request_info=response.request_info,
-                        history=response.history,
-                        status=response.status,
-                        message=f"Client error: {error_text}",
-                    )
+
+                # Define error messages for specific status codes
+                error_messages = {
+                    401: "Authentication required",
+                    403: "Access forbidden",
+                    404: "Resource not found",
+                    429: "Rate limit exceeded",
+                }
+
+                # Get the specific error message or use a default
+                message = f"{error_messages.get(response.status, 'Client error')}: {error_text}"
+
+                raise ClientResponseError(
+                    request_info=response.request_info,
+                    history=response.history,
+                    status=response.status,
+                    message=message,
+                )
 
             elif 500 <= response.status < 600:
                 error_text = await response.text()
