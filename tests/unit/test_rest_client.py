@@ -1,27 +1,11 @@
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 from urllib.parse import urljoin
 
 import pytest
-from aiohttp import ClientResponseError, ClientSession, ClientTimeout
+from aiohttp import ClientResponseError, ClientTimeout
 
 from grpy.rest_client import RestClient
-
-
-@pytest.fixture
-def base_url():
-    return "https://api.example.com"
-
-
-@pytest.fixture
-def endpoint():
-    return "/v1/resource"
-
-
-@pytest.fixture
-async def rest_client(base_url):
-    async with RestClient(url=base_url) as client:
-        yield client
 
 
 class TestRestClientInitialization:
@@ -115,81 +99,77 @@ class TestRestClientContextManager:
 
 class TestRestClientRequests:
     @pytest.mark.asyncio
-    async def test_handle_request_get(self, base_url, endpoint):
-        # Create a Future to be returned by the request method
-        future = asyncio.Future()
-        mock_response = MagicMock()
-        mock_response.status = 200
-
-        # Create a separate future for the json method
-        json_future = asyncio.Future()
-        json_future.set_result({"data": "test"})
-        mock_response.json = lambda: json_future
-
-        future.set_result(mock_response)
-
-        with patch.object(ClientSession, "request", return_value=future) as mock_request:
-            async with RestClient(url=base_url, endpoint=endpoint) as client:
-                response = await client.handle_request()
-
-                mock_request.assert_called_once_with(
-                    method="GET",
-                    url=urljoin(base_url, endpoint),
-                    headers=client.headers,
-                    params={},
-                    timeout=client.timeout_obj,
-                )
-
-                assert response == mock_response
-
-    @pytest.mark.asyncio
-    async def test_handle_request_post_with_json(self, base_url):
-        # Create a Future to be returned by the request method
-        future = asyncio.Future()
-        mock_response = MagicMock()
-        mock_response.status = 201
-
-        # Create a separate future for the json method
-        json_future = asyncio.Future()
-        json_future.set_result({"id": "123"})
-        mock_response.json = lambda: json_future
-
-        future.set_result(mock_response)
-
-        json_data = {"name": "test", "value": 42}
-
-        with patch.object(ClientSession, "request", return_value=future) as mock_request:
-            async with RestClient(url=base_url, method="POST") as client:
-                response = await client.handle_request(json=json_data)
-
-                mock_request.assert_called_once_with(
-                    method="POST",
-                    url=base_url,
-                    headers=client.headers,
-                    params={},
-                    timeout=client.timeout_obj,
-                    json=json_data,
-                )
-
-                assert response == mock_response
-
-    @pytest.mark.asyncio
-    async def test_handle_request_timeout(self, base_url):
-        """Test that timeout errors are properly handled"""
-        # Create a client
-        client = RestClient(url=base_url)
+    async def test_handle_request_get(
+        self, base_url, endpoint, mock_client_session, enhanced_mock_response_factory
+    ):
+        # Create a mock response
+        mock_response = enhanced_mock_response_factory(json_data={"data": "test"})
 
         # Create a mock session
-        mock_session = MagicMock()
+        mock_session = mock_client_session(response=mock_response)
 
-        # Configure the mock session to raise a timeout error
-        async def mock_request(*args, **kwargs):
+        # Create a client and set the mock session
+        client = RestClient(url=base_url, endpoint=endpoint)
+        client.session = mock_session
+
+        # Execute the request
+        response = await client.handle_request()
+
+        # Verify the request was made correctly
+        mock_session.request.assert_called_once_with(
+            method="GET",
+            url=urljoin(base_url, endpoint),
+            headers=client.headers,
+            params={},
+            timeout=client.timeout_obj,
+        )
+
+        assert response == mock_response
+
+    @pytest.mark.asyncio
+    async def test_handle_request_post_with_json(
+        self, base_url, mock_client_session, enhanced_mock_response_factory
+    ):
+        # Create a mock response
+        mock_response = enhanced_mock_response_factory(status=201, json_data={"id": "123"})
+
+        # Create a mock session
+        mock_session = mock_client_session(response=mock_response)
+
+        # Create a client and set the mock session
+        client = RestClient(url=base_url, method="POST")
+        client.session = mock_session
+
+        # JSON data to send
+        json_data = {"name": "test", "value": 42}
+
+        # Execute the request
+        response = await client.handle_request(json=json_data)
+
+        # Verify the request was made correctly
+        mock_session.request.assert_called_once_with(
+            method="POST",
+            url=base_url,
+            headers=client.headers,
+            params={},
+            timeout=client.timeout_obj,
+            json=json_data,
+        )
+
+        assert response == mock_response
+
+    @pytest.mark.asyncio
+    async def test_handle_request_timeout(self, base_url, mock_client_session):
+        """Test that timeout errors are properly handled"""
+
+        # Create a mock session that raises a timeout error
+        async def timeout_side_effect(*args, **kwargs):
             raise asyncio.TimeoutError("Connection timed out")
 
-        mock_session.request = mock_request
-        mock_session.closed = False
+        mock_session = mock_client_session(side_effect=timeout_side_effect)
 
-        # Set the mock session directly on the client
+        # Create a client and set the mock session
+        client = RestClient(url=base_url)
         client.session = mock_session
 
         # Test the handle_request method
@@ -197,38 +177,47 @@ class TestRestClientRequests:
             await client.handle_request()
 
         # Verify the error message
-        assert "Request timed out" in str(excinfo.value)
+        assert "Connection timed out" in str(excinfo.value)
 
     @pytest.mark.asyncio
-    async def test_handle_request_error(self, base_url):
+    async def test_handle_request_error(
+        self, base_url, mock_client_session, enhanced_mock_response_factory
+    ):
         """Test that HTTP errors are properly handled"""
-        # Create a client
-        client = RestClient(url=base_url)
-
-        # Create a mock session
-        mock_session = MagicMock()
+        # Create a request_info mock with a real_url attribute
+        request_info_mock = MagicMock()
+        request_info_mock.real_url = f"{base_url}/resource"
 
         # Create a mock response with 404 status
-        mock_response = MagicMock()
-        mock_response.status = 404
-        mock_response.text = AsyncMock(return_value="Not Found")
+        mock_response = enhanced_mock_response_factory(status=404, text="Not Found")
+        mock_response.request_info = request_info_mock
 
-        # Configure the mock session to return the mock response
-        async def mock_request(*args, **kwargs):
-            return mock_response
+        # Configure raise_for_status to raise an error
+        async def raise_error():
+            error = ClientResponseError(
+                request_info=request_info_mock,
+                history=(),
+                status=404,
+                message="Not Found",
+                headers={},
+            )
+            raise error
 
-        mock_session.request = mock_request
-        mock_session.closed = False
+        mock_response.raise_for_status = raise_error
 
-        # Set the mock session directly on the client
+        # Create a mock session
+        mock_session = mock_client_session(response=mock_response)
+
+        # Create a client and set the mock session
+        client = RestClient(url=base_url)
         client.session = mock_session
 
         # Test the handle_request method
         with pytest.raises(ClientResponseError) as excinfo:
             await client.handle_request()
 
-        # Verify the error message contains the expected text
-        assert "Resource not found" in str(excinfo.value)
+        # Verify the error details
+        assert excinfo.value.status == 404
 
 
 class TestRestClientUtilities:

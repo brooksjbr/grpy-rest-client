@@ -5,9 +5,9 @@ from src.grpy.pagination import PageNumberPaginationStrategy
 
 class TestPageNumberPaginationStrategy:
     @pytest.fixture
-    def strategy(self):
+    def strategy(self, pagination_strategy_factory):
         """Create a PageNumberPaginationStrategy instance for testing."""
-        return PageNumberPaginationStrategy()
+        return pagination_strategy_factory(PageNumberPaginationStrategy)
 
     @pytest.fixture
     def page_response(self):
@@ -58,10 +58,10 @@ class TestPageNumberPaginationStrategy:
             },
         }
 
-    def test_extract_data_simple_key(self, strategy, page_response):
+    def test_extract_data_simple_key(self, strategy, page_number_response):
         """Test extracting data with a simple key."""
-        result = strategy.extract_data(page_response, "items")
-        assert result == page_response["items"]
+        result = strategy.extract_data(page_number_response, "items")
+        assert result == page_number_response["items"]
         assert len(result) == 2
         assert result[0]["id"] == "item1"
         assert result[1]["id"] == "item2"
@@ -74,20 +74,20 @@ class TestPageNumberPaginationStrategy:
         assert result[0]["id"] == "event1"
         assert result[1]["id"] == "event2"
 
-    def test_extract_data_invalid_key(self, strategy, page_response):
+    def test_extract_data_invalid_key(self, strategy, page_number_response):
         """Test extracting data with an invalid key returns the full response."""
-        result = strategy.extract_data(page_response, "nonexistent")
-        assert result == page_response
+        result = strategy.extract_data(page_number_response, "nonexistent")
+        assert result == page_number_response
 
-    def test_extract_data_no_key(self, strategy, page_response):
+    def test_extract_data_no_key(self, strategy, page_number_response):
         """Test extracting data with no key returns the full response."""
-        result = strategy.extract_data(page_response, None)
-        assert result == page_response
+        result = strategy.extract_data(page_number_response, None)
+        assert result == page_number_response
 
-    def test_get_next_page_info_has_more_pages(self, strategy, page_response):
+    def test_get_next_page_info_has_more_pages(self, strategy, page_number_response):
         """Test getting next page info when there are more pages."""
         current_params = {"page": 0, "size": 2}
-        has_more, next_params = strategy.get_next_page_info(page_response, current_params)
+        has_more, next_params = strategy.get_next_page_info(page_number_response, current_params)
 
         assert has_more is True
         assert next_params == {"page": 1, "size": 2}
@@ -100,10 +100,10 @@ class TestPageNumberPaginationStrategy:
         assert has_more is False
         assert next_params == {"page": 2, "size": 2}  # Params unchanged
 
-    def test_get_next_page_info_no_page_param(self, strategy, page_response):
+    def test_get_next_page_info_no_page_param(self, strategy, page_number_response):
         """Test getting next page info when no page param in current params."""
         current_params = {"size": 2}
-        has_more, next_params = strategy.get_next_page_info(page_response, current_params)
+        has_more, next_params = strategy.get_next_page_info(page_number_response, current_params)
 
         assert has_more is True
         assert next_params == {"size": 2, "page": 1}  # Page param added
