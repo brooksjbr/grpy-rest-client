@@ -276,3 +276,18 @@ class TestRestClientUtilities:
         assert client.timeout == 30
         assert client.timeout_obj.total == 30
         assert client.session._timeout == client.timeout_obj
+
+    def test_update_data_with_none_data(self, base_url):
+        client = RestClient(url=base_url)
+        assert client.data is None
+
+        client.update_data({"new": "data", "count": 42})
+
+        assert client.data == {"new": "data", "count": 42}
+
+    def test_update_data_overwrites_existing_keys(self, base_url):
+        client = RestClient(url=base_url, data={"key1": "original", "key2": "value"})
+
+        client.update_data({"key1": "updated"})
+
+        assert client.data == {"key1": "updated", "key2": "value"}

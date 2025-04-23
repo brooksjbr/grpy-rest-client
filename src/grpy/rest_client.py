@@ -123,6 +123,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
     headers: Dict[str, str] = None
     timeout_obj: Optional[ClientTimeout] = None
     pagination_strategy: Optional[PaginationStrategy] = None
+    data: Optional[Dict[str, Any]] = Field(default=None)
 
     # Class variables need to be annotated with ClassVar
     VALID_METHODS: ClassVar[Set[str]] = {
@@ -223,6 +224,11 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
     async def handle_request(self, **kwargs):
         """Make a REST request with specified parameters."""
         request_url = urljoin(self.url, self.endpoint) if self.endpoint else self.url
+
+        # Include data in the request if it's provided
+        if self.data is not None and self.method in ["POST", "PUT", "PATCH"]:
+            kwargs["json"] = self.data
+
         response = await self.session.request(
             method=self.method,
             url=request_url,
@@ -256,6 +262,16 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         self.timeout_obj = ClientTimeout(total=timeout)
         if self.session:
             self.session._timeout = self.timeout_obj
+
+    def update_data(self, data: Dict[str, Any]):
+        """Update request data for POST/PUT/PATCH requests.
+
+        Args:
+            data (dict): Dictionary of data to update or add
+        """
+        if self.data is None:
+            self.data = {}
+        self.data.update(data)
 
     def set_pagination_strategy(
         self, strategy_name: str = None, strategy: PaginationStrategy = None
