@@ -1,4 +1,3 @@
-import asyncio
 from asyncio import TimeoutError
 from typing import (
     Any,
@@ -14,7 +13,7 @@ from typing import (
 )
 from urllib.parse import urljoin
 
-from aiohttp import ClientError, ClientResponse, ClientResponseError, ClientSession, ClientTimeout
+from aiohttp import ClientResponse, ClientResponseError, ClientSession, ClientTimeout
 from aiohttp import ContentTypeError as AiohttpContentTypeError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -29,30 +28,6 @@ class RestClientError(Exception):
 
 class ServerError(RestClientError):
     """Exception for 5xx server errors."""
-
-    pass
-
-
-class AuthenticationError(ClientError):
-    """Exception for 401 authentication errors."""
-
-    pass
-
-
-class ForbiddenError(ClientError):
-    """Exception for 403 forbidden errors."""
-
-    pass
-
-
-class RateLimitError(ClientError):
-    """Exception for 429 rate limit errors."""
-
-    pass
-
-
-class ContentTypeError(RestClientError):
-    """Exception for content type errors."""
 
     pass
 
@@ -118,6 +93,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
     timeout_obj: Optional[ClientTimeout] = None
     pagination_strategy: Optional[PaginationStrategy] = None
     data: Optional[Dict[str, Any]] = Field(default=None)
+    content_type: str = "application/json"
 
     # Class variables need to be annotated with ClassVar
     VALID_METHODS: ClassVar[Set[str]] = {
@@ -161,10 +137,22 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         if self.pagination_strategy is None:
             self.pagination_strategy = HateoasPaginationStrategy()
 
+        # Set up finalizer for cleanup
+        self._finalizer = None
+
     async def __aenter__(self) -> "RestClient":
         """Async context manager entry point."""
+        import weakref
+
         if self.session is None:
             self.session = ClientSession()
+
+        # Register finalizer only when we create a session
+        if self._finalizer is None:
+            # Store session reference for finalizer
+            session = self.session
+            # Create finalizer that will close the session when this object is garbage collected
+            self._finalizer = weakref.finalize(self, RestClient._cleanup_session, session)
         return self
 
     async def __aexit__(
@@ -176,26 +164,27 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         """Async context manager exit point."""
         await self.close()
 
-    def __del__(self) -> None:
-        """Ensure session is closed when object is garbage collected."""
-        if hasattr(self, "session") and self.session and not self.session.closed:
-            import warnings
+    @staticmethod
+    def _cleanup_session(session):
+        """Static method to clean up session without reference to self."""
+        if session and not session.closed:
+            import asyncio
 
-            warnings.warn(
-                "RestClient was garbage collected with an open session. "
-                "Please use 'async with' context manager or explicitly call 'await client.close()' "
-                "to ensure proper resource cleanup.",
-                ResourceWarning,
-                stacklevel=2,
-            )
-
-            # Schedule the session for closing if possible
             try:
+                # Try to get the current event loop
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    loop.create_task(self.session.close())
+                    loop.create_task(session.close())
+                else:
+                    # If loop isn't running, create a new one just for cleanup
+                    new_loop = asyncio.new_event_loop()
+                    new_loop.run_until_complete(session.close())
+                    new_loop.close()
             except Exception:
-                pass  # Best effort cleanup
+                # Last resort: try to close synchronously if possible
+                # This isn't ideal but better than leaking resources
+                if hasattr(session, "_connector") and hasattr(session._connector, "_close"):
+                    session._connector._close()
 
     @field_validator("method")
     @classmethod
@@ -219,14 +208,21 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             await self.session.close()
             self.session = None
 
+            # Deactivate finalizer since we've manually cleaned up
+            if self._finalizer is not None:
+                self._finalizer.detach()
+                self._finalizer = None
+
     @handle_exception
     async def handle_request(self, **kwargs) -> ClientResponse:
         """Make a REST request with specified parameters."""
         request_url = urljoin(self.url, self.endpoint) if self.endpoint else self.url
 
         # Include data in the request if it's provided
-        if self.data is not None and self.method in ["POST", "PUT", "PATCH"]:
+        if self.content_type == "application/json" and self.data is not None:
             kwargs["json"] = self.data
+        elif self.data is not None:
+            kwargs["data"] = self.data
 
         response = await self.session.request(
             method=self.method,
@@ -271,6 +267,11 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         if self.data is None:
             self.data = {}
         self.data.update(data)
+
+    def set_content_type(self, content_type: str) -> None:
+        """Set the content type for requests."""
+        self.content_type = content_type
+        self.headers["Content-Type"] = content_type
 
     def set_pagination_strategy(
         self, strategy_name: Optional[str] = None, strategy: Optional[PaginationStrategy] = None
@@ -334,7 +335,10 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
 
             # Make the request
             response = await self.handle_request(**request_kwargs)
-            response_json = await response.json()
+            try:
+                response_json = await response.json()
+            except AiohttpContentTypeError as e:
+                raise RestClientError(f"Failed to parse JSON response: {e}") from e
 
             # Extract the data from the response using the pagination strategy
             data_items = self.pagination_strategy.extract_data(response_json, data_key)

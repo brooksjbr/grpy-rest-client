@@ -4,8 +4,9 @@ from urllib.parse import urljoin
 
 import pytest
 from aiohttp import ClientResponseError, ClientTimeout
+from aiohttp import ContentTypeError as AiohttpContentTypeError
 
-from grpy.rest_client import RestClient
+from grpy.rest_client import RestClient, RestClientError
 
 
 class TestRestClientInitialization:
@@ -280,3 +281,45 @@ class TestRestClientUtilities:
         client.update_data({"key1": "updated"})
 
         assert client.data == {"key1": "updated", "key2": "value"}
+
+
+class TestRestClientPagination:
+    @pytest.mark.asyncio
+    async def test_paginate_json_parse_error(
+        self, base_url, mock_client_session, enhanced_mock_response_factory
+    ):
+        """Test that JSON parsing errors in paginate are properly handled."""
+        # Create a mock response that will raise a ContentTypeError when json() is called
+        mock_response = enhanced_mock_response_factory(status=200, text="Not JSON data")
+
+        # Create a request_info mock with a real_url attribute
+        request_info_mock = MagicMock()
+        request_info_mock.real_url = f"{base_url}/resource"
+
+        # Override the json method to raise ContentTypeError with proper request_info
+        async def json_error():
+            raise AiohttpContentTypeError(
+                request_info=request_info_mock,
+                history=(),
+                message="Attempt to decode JSON with unexpected mimetype: text/plain",
+                headers={"Content-Type": "text/plain"},
+            )
+
+        mock_response.json = json_error
+        mock_response.request_info = request_info_mock
+
+        # Create a mock session
+        mock_session = mock_client_session(response=mock_response)
+
+        # Create a client and set the mock session
+        client = RestClient(url=base_url)
+        client.session = mock_session
+
+        # Test the paginate method
+        with pytest.raises(RestClientError) as excinfo:
+            async for _ in client.paginate():
+                pass  # This should not execute
+
+        # Verify the error message
+        assert "Failed to parse JSON response" in str(excinfo.value)
+        assert "Attempt to decode JSON with unexpected mimetype" in str(excinfo.value)
