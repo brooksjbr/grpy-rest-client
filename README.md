@@ -1,3 +1,7 @@
+[![Tests](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/test.yml/badge.svg)](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/test.yml)
+[![Lint](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/lint.yml/badge.svg)](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/lint.yml)
+[![Lint](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/release.yml/badge.svg)](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/release.yml)
+
 # GRPY REST Client
 
 A Python package for making HTTP requests with support for asynchronous operations, pagination strategies, and retry mechanisms.
@@ -13,6 +17,7 @@ A Python package for making HTTP requests with support for asynchronous operatio
 -   **Type Safety**: Built with Pydantic for robust data validation
 
 ## Installation
+
 ### From Source
 
 Clone the repository and install the package:
@@ -22,6 +27,7 @@ git clone https://github.com/brooksjbr/grpy-rest-client.git
 cd grpy-rest-client
 pip install -e .
 ```
+
 ### Development Environment Setup
 
 This project includes a bootstrap script to set up a virtual environment:
