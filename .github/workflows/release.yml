@@ -61,4 +61,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          semantic-release publish --github-token ${{ secrets.GITHUB_TOKEN }}
+          semantic-release version --no-vcs-release --skip-build --no-push --no-tag
