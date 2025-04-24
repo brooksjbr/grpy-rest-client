@@ -69,7 +69,6 @@ ensure_newline_before_comments = true
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-# Add semantic-release configuration
 [tool.semantic_release]
 version_source = "commit"
 branch = "main"
@@ -79,17 +78,7 @@ build_command = "python -m build"
 commit_version_number = true
 commit_message = "chore(release): {version} [skip ci]"
 tag_format = "v{version}"
-major_on_zero = false
-changelog_file = "CHANGELOG.md"
-changelog_scope = false
-version_variable = "src/grpy_rest_client/__init__.py:__version__"
-assets = []
-build_command_env = []
-commit_parser = "conventional"
-logging_use_named_masks = false
-allow_zero_version = true
-repo_dir = "/home/brooks/projects/grpy-rest-client"
-no_git_verify = false
+
 
 [tool.semantic_release.branches.main]
 match = "(main|master)"
