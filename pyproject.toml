@@ -6,7 +6,6 @@ requires = ["hatchling>=0.22", "hatch-vcs>=0.2"]
 [project]
 name = "grpy_rest_client"
 version = "0.1.0"
-
 description = "A package for making HTTP requests."
 readme = "README.md"
 license = "MIT"
@@ -32,6 +31,7 @@ dependencies = [
 Homepage = "https://github.com/brooksjbr/grpy-rest-client"
 Documentation = "https://github.com/brooksjbr/grpy-rest-client/blob/main/README.md"
 Repository = "https://github.com/brooksjbr/grpy-rest-client.git"
+
 [project.optional-dependencies]
 dev = [
     "black>=23.0.0",
@@ -41,7 +41,10 @@ dev = [
     "pytest >= 6.1.1",
     "pytest-cov >= 4.1.0",
     "pytest-asyncio",
-    "pre-commit"
+    "pre-commit",
+    "python-semantic-release>=8.0.0",
+    "build",
+    "twine"
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -65,3 +68,18 @@ ensure_newline_before_comments = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+# Add semantic-release configuration
+[tool.semantic_release]
+version_source = "commit"
+branch = "main"
+upload_to_pypi = false
+upload_to_release = true
+build_command = "python -m build"
+commit_version_number = true
+commit_message = "chore(release): {version} [skip ci]"
+tag_format = "v{version}"
+major_on_zero = false
+changelog_file = "CHANGELOG.md"
+changelog_scope = false
+version_variable = "src/grpy_rest_client/__init__.py:__version__"
