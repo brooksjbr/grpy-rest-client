@@ -6,7 +6,7 @@ import pytest
 from aiohttp import ClientResponseError, ClientTimeout
 from aiohttp import ContentTypeError as AiohttpContentTypeError
 
-from grpy.rest_client import RestClient, RestClientError
+from src.grpy.rest_client import RestClient, RestClientError
 
 
 class TestRestClientInitialization:

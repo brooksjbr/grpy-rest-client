@@ -17,6 +17,7 @@ from aiohttp import ClientResponse, ClientResponseError, ClientSession, ClientTi
 from aiohttp import ContentTypeError as AiohttpContentTypeError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .logging import Logger
 from .pagination import HateoasPaginationStrategy, PageNumberPaginationStrategy, PaginationStrategy
 
 
@@ -94,6 +95,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
     pagination_strategy: Optional[PaginationStrategy] = None
     data: Optional[Dict[str, Any]] = Field(default=None)
     content_type: str = "application/json"
+    logger: Optional[Logger] = None
 
     # Class variables need to be annotated with ClassVar
     VALID_METHODS: ClassVar[Set[str]] = {
@@ -136,6 +138,9 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         # Default to HATEOAS pagination strategy if none is provided
         if self.pagination_strategy is None:
             self.pagination_strategy = HateoasPaginationStrategy()
+
+        if self.logger is None:
+            self.logger = Logger()
 
         # Set up finalizer for cleanup
         self._finalizer = None
