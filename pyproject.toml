@@ -78,6 +78,10 @@ build_command = "python -m build"
 commit_version_number = true
 commit_message = "chore(release): {version} [skip ci]"
 tag_format = "v{version}"
+version_variables = [
+    "src/grpy/__version__",
+    "pyproject.toml:version"
+]
 
 
 [tool.semantic_release.branches.main]
