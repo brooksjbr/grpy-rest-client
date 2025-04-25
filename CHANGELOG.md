@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.2.0 (2025-04-25)
+
+### Features
+
+- Default logger
+  ([`b33cb4b`](https://github.com/brooksjbr/grpy-rest-client/commit/b33cb4bdd8a74d0e6214e73bf5aee05816adb268))
+
+
 ## v0.1.1 (2025-04-25)
 
 ### Bug Fixes
