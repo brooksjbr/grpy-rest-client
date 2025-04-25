@@ -17,7 +17,7 @@ from aiohttp import ClientResponse, ClientResponseError, ClientSession, ClientTi
 from aiohttp import ContentTypeError as AiohttpContentTypeError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .logging import Logger
+from .logging import DefaultLogger, Logger
 from .pagination import HateoasPaginationStrategy, PageNumberPaginationStrategy, PaginationStrategy
 
 
@@ -36,6 +36,12 @@ class ServerError(RestClientError):
 def handle_exception(method):
     async def wrapper(self, *args, **kwargs):
         try:
+            self.logger.debug(
+                f"Executing {method.__name__} request",
+                url=urljoin(self.url, self.endpoint) if self.endpoint else self.url,
+                method=self.method,
+            )
+
             response = await method(self, *args, **kwargs)
 
             # Check status codes
@@ -53,6 +59,12 @@ def handle_exception(method):
                 # Get the specific error message or use a default
                 message = f"{error_messages.get(response.status, 'Client error')}: {error_text}"
 
+                self.logger.error(
+                    f"Client error in {method.__name__}",
+                    status=response.status,
+                    error_details=message,
+                )  # Changed 'message' to 'error_details'
+
                 raise ClientResponseError(
                     request_info=response.request_info,
                     history=response.history,
@@ -62,18 +74,34 @@ def handle_exception(method):
 
             elif 500 <= response.status < 600:
                 error_text = await response.text()
+                self.logger.error(
+                    f"Server error in {method.__name__}",
+                    status=response.status,
+                    error_details=error_text,
+                )  # Changed 'message' to 'error_details'
                 raise ServerError(f"Server error {response.status}: {error_text}")
 
+            self.logger.debug(
+                f"Request {method.__name__} completed successfully", status=response.status
+            )
             return response
 
         except TimeoutError as e:
+            self.logger.error(f"Request timeout in {method.__name__}", error=str(e))
             raise TimeoutError(f"Request timed out: {e}") from e
-        except ClientResponseError:
+        except ClientResponseError as e:
             # Re-raise ClientResponseError exceptions
+            self.logger.error(
+                f"Client response error in {method.__name__}",
+                status=getattr(e, "status", "unknown"),
+                error_details=str(e),
+            )  # Changed 'message' to 'error_details'
             raise
         except AiohttpContentTypeError as e:
+            self.logger.error(f"Content type error in {method.__name__}", error=str(e))
             raise AiohttpContentTypeError(f"Content type error: {e}") from e
         except Exception as exc:
+            self.logger.error(f"Unexpected error in {method.__name__}", error=str(exc))
             raise ClientResponseError(
                 request_info=None, history=None, status=0, message=f"Unexpected error: {exc}"
             ) from exc
@@ -140,16 +168,22 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             self.pagination_strategy = HateoasPaginationStrategy()
 
         if self.logger is None:
-            self.logger = Logger()
+            self.logger = DefaultLogger()
 
         # Set up finalizer for cleanup
         self._finalizer = None
+
+        self.logger.info(
+            "RestClient initialized", url=self.url, method=self.method, timeout=self.timeout
+        )
 
     async def __aenter__(self) -> "RestClient":
         """Async context manager entry point."""
         import weakref
 
+        self.logger.debug("Entering RestClient context")
         if self.session is None:
+            self.logger.debug("Creating new ClientSession")
             self.session = ClientSession()
 
         # Register finalizer only when we create a session
@@ -158,6 +192,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             session = self.session
             # Create finalizer that will close the session when this object is garbage collected
             self._finalizer = weakref.finalize(self, RestClient._cleanup_session, session)
+            self.logger.debug("Registered session cleanup finalizer")
         return self
 
     async def __aexit__(
@@ -167,6 +202,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         exc_tb: Optional[Any],
     ) -> None:
         """Async context manager exit point."""
+        self.logger.debug("Exiting RestClient context")
         await self.close()
 
     @staticmethod
@@ -210,6 +246,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
     async def close(self) -> None:
         """Explicitly close the session."""
         if self.session and not self.session.closed:
+            self.logger.debug("Closing client session")
             await self.session.close()
             self.session = None
 
@@ -217,6 +254,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             if self._finalizer is not None:
                 self._finalizer.detach()
                 self._finalizer = None
+                self.logger.debug("Detached session cleanup finalizer")
 
     @handle_exception
     async def handle_request(self, **kwargs) -> ClientResponse:
@@ -226,8 +264,12 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         # Include data in the request if it's provided
         if self.content_type == "application/json" and self.data is not None:
             kwargs["json"] = self.data
+            self.logger.debug("Adding JSON data to request", data_size=len(str(self.data)))
         elif self.data is not None:
             kwargs["data"] = self.data
+            self.logger.debug("Adding form data to request", data_size=len(str(self.data)))
+
+        self.logger.info(f"Making {self.method} request", url=request_url, params=self.params)
 
         response = await self.session.request(
             method=self.method,
@@ -238,10 +280,17 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             **kwargs,
         )
 
+        self.logger.info(
+            "Received response",
+            status=response.status,
+            content_type=response.headers.get("Content-Type"),
+        )
+
         return response
 
     def update_headers(self, headers: Dict[str, str]) -> None:
         """Update headers for the request."""
+        self.logger.debug("Updating request headers", new_headers=headers)
         self.headers.update(headers)
 
     def update_params(self, params: Dict[str, Any]) -> None:
@@ -250,6 +299,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         Args:
             params (dict): Dictionary of query parameters to update or add
         """
+        self.logger.debug("Updating request parameters", new_params=params)
         self.params.update(params)
 
     def update_timeout(self, timeout: float) -> None:
@@ -258,6 +308,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         Args:
             timeout (float): New timeout value in seconds
         """
+        self.logger.debug("Updating timeout", old_timeout=self.timeout, new_timeout=timeout)
         self.timeout = timeout
         self.timeout_obj = ClientTimeout(total=timeout)
         if self.session:
@@ -271,10 +322,12 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         """
         if self.data is None:
             self.data = {}
+        self.logger.debug("Updating request data", data_keys=list(data.keys()))
         self.data.update(data)
 
     def set_content_type(self, content_type: str) -> None:
         """Set the content type for requests."""
+        self.logger.debug("Setting content type", old_type=self.content_type, new_type=content_type)
         self.content_type = content_type
         self.headers["Content-Type"] = content_type
 
@@ -292,15 +345,25 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
                         strategy_name is not a valid built-in strategy
         """
         if strategy is not None:
+            self.logger.info(
+                "Setting custom pagination strategy", strategy_type=strategy.__class__.__name__
+            )
             self.pagination_strategy = strategy
         elif strategy_name is not None:
             if strategy_name not in self.PAGINATION_STRATEGIES:
+                self.logger.error(
+                    "Invalid pagination strategy",
+                    strategy_name=strategy_name,
+                    valid_strategies=list(self.PAGINATION_STRATEGIES.keys()),
+                )
                 raise ValueError(
                     f"Invalid pagination strategy: {strategy_name}. "
                     f"Valid strategies are {list(self.PAGINATION_STRATEGIES.keys())}"
                 )
+            self.logger.info("Setting built-in pagination strategy", strategy_name=strategy_name)
             self.pagination_strategy = self.PAGINATION_STRATEGIES[strategy_name]()
         else:
+            self.logger.error("No pagination strategy provided")
             raise ValueError("Either strategy_name or strategy must be provided")
 
     async def paginate(
@@ -324,7 +387,15 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             ValueError: If no pagination strategy is configured
         """
         if self.pagination_strategy is None:
+            self.logger.error("Pagination attempted without a strategy")
             raise ValueError("No pagination strategy configured")
+
+        self.logger.info(
+            "Starting pagination",
+            data_key=data_key,
+            max_pages=max_pages,
+            strategy=self.pagination_strategy.__class__.__name__,
+        )
 
         page_count = 0
         current_params = self.params.copy()
@@ -333,20 +404,28 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         while True:
             # Check if we've reached the maximum number of pages
             if max_pages is not None and page_count >= max_pages:
+                self.logger.info("Reached maximum number of pages", max_pages=max_pages)
                 break
 
             # Update the client's params for this request
             self.params = current_params.copy()
+            self.logger.debug(f"Fetching page {page_count + 1}", params=self.params)
 
             # Make the request
             response = await self.handle_request(**request_kwargs)
             try:
                 response_json = await response.json()
+                self.logger.debug("Successfully parsed JSON response")
             except AiohttpContentTypeError as e:
+                self.logger.error("Failed to parse JSON response", error=str(e))
                 raise RestClientError(f"Failed to parse JSON response: {e}") from e
 
             # Extract the data from the response using the pagination strategy
             data_items = self.pagination_strategy.extract_data(response_json, data_key)
+            self.logger.debug(
+                f"Extracted data from page {page_count + 1}",
+                items_count=len(data_items) if isinstance(data_items, list) else "unknown",
+            )
 
             # Yield the data items from this page
             yield data_items
@@ -360,7 +439,9 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
             )
 
             if not has_more:
+                self.logger.info("No more pages available", total_pages=page_count)
                 break
 
             # Update the parameters for the next page
             current_params = next_params
+            self.logger.debug("Moving to next page", next_params=next_params)
