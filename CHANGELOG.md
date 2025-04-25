@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.3.0 (2025-04-25)
+
+### Chores
+
+- Disable gh releases
+  ([`2f6f6c5`](https://github.com/brooksjbr/grpy-rest-client/commit/2f6f6c5f723bbbb701c3269c6ddaaf7965189e0b))
+
+### Features
+
+- Add logging statements to rest client
+  ([`0ab951a`](https://github.com/brooksjbr/grpy-rest-client/commit/0ab951ad2889c0d7af876bf3fd6c4a442d7ba78b))
+
+
 ## v0.2.0 (2025-04-25)
 
 ### Features
