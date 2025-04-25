@@ -1,6 +1,6 @@
 [![Tests](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/test.yml/badge.svg)](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/test.yml)
 [![Lint](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/lint.yml/badge.svg)](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/lint.yml)
-[![Lint](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/release.yml/badge.svg)](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/release.yml)
+[![Release](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/release.yml/badge.svg)](https://github.com/brooksjbr/grpy-rest-client/actions/workflows/release.yml)
 
 # GRPY REST Client
 

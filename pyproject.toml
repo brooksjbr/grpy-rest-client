@@ -79,7 +79,7 @@ commit_version_number = true
 commit_message = "chore(release): {version} [skip ci]"
 tag_format = "v{version}"
 version_variables = [
-    "src/grpy/__version__",
+    "src/grpy/__init__.py:__version__",
     "pyproject.toml:version"
 ]
 
