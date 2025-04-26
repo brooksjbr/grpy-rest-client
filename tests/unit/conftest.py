@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import ClientSession
@@ -115,26 +115,25 @@ def enhanced_mock_response_factory():
 
 @pytest.fixture
 def mock_client_session():
-    """Fixture to create a mock ClientSession with configurable request responses."""
-
     def _create_session(response=None, side_effect=None):
-        # Create a mock session
         mock_session = MagicMock(spec=ClientSession)
-
-        # Configure the request method
-        request_mock = MagicMock()
-
-        if response:
-            # Create a future to be returned by the request method
-            future = asyncio.Future()
-            future.set_result(response)
-            request_mock.return_value = future
-        elif side_effect:
-            request_mock.side_effect = side_effect
-
-        mock_session.request = request_mock
-        mock_session.close = MagicMock(return_value=asyncio.Future())
         mock_session.closed = False
+
+        # Mock the close method
+        async def mock_close():
+            mock_session.closed = True
+
+        mock_session.close = mock_close
+
+        # Mock the request method
+        if side_effect:
+            mock_session.request = AsyncMock(side_effect=side_effect)
+        else:
+            mock_session.request = AsyncMock(return_value=response)
+
+        # Make session work as an async context manager
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
 
         return mock_session
 

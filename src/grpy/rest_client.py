@@ -1,4 +1,5 @@
 from asyncio import TimeoutError
+from contextlib import AsyncExitStack
 from typing import (
     Any,
     AsyncContextManager,
@@ -124,6 +125,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
     data: Optional[Dict[str, Any]] = Field(default=None)
     content_type: str = "application/json"
     logger: Optional[Logger] = None
+    _exit_stack: Optional[AsyncExitStack] = None
 
     # Class variables need to be annotated with ClassVar
     VALID_METHODS: ClassVar[Set[str]] = {
@@ -170,8 +172,7 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
         if self.logger is None:
             self.logger = DefaultLogger()
 
-        # Set up finalizer for cleanup
-        self._finalizer = None
+        self._exit_stack = AsyncExitStack()
 
         self.logger.info(
             "RestClient initialized", url=self.url, method=self.method, timeout=self.timeout
@@ -179,20 +180,22 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
 
     async def __aenter__(self) -> "RestClient":
         """Async context manager entry point."""
-        import weakref
-
         self.logger.debug("Entering RestClient context")
+
+        # Create exit stack for managing resources
+        if self._exit_stack is None:
+            self._exit_stack = AsyncExitStack()
+
+        # If a session was provided externally, use it without adding to exit stack
+        # (the caller is responsible for its lifecycle)
         if self.session is None:
             self.logger.debug("Creating new ClientSession")
             self.session = ClientSession()
+            # Add session to exit stack so it will be automatically closed
+            await self._exit_stack.enter_async_context(self.session)
+        else:
+            self.logger.debug("Using existing ClientSession")
 
-        # Register finalizer only when we create a session
-        if self._finalizer is None:
-            # Store session reference for finalizer
-            session = self.session
-            # Create finalizer that will close the session when this object is garbage collected
-            self._finalizer = weakref.finalize(self, RestClient._cleanup_session, session)
-            self.logger.debug("Registered session cleanup finalizer")
         return self
 
     async def __aexit__(
@@ -203,7 +206,14 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
     ) -> None:
         """Async context manager exit point."""
         self.logger.debug("Exiting RestClient context")
-        await self.close()
+        if self._exit_stack is not None:
+            try:
+                await self._exit_stack.aclose()
+            except Exception as e:
+                self.logger.error(f"Error during client cleanup: {e}")
+            finally:
+                self._exit_stack = None
+                self.session = None
 
     @staticmethod
     def _cleanup_session(session):
@@ -245,9 +255,10 @@ class RestClient(BaseModel, AsyncContextManager["RestClient"]):
 
     async def close(self) -> None:
         """Explicitly close the session."""
-        if self.session and not self.session.closed:
+        if self._exit_stack is not None:
             self.logger.debug("Closing client session")
-            await self.session.close()
+            await self._exit_stack.aclose()
+            self._exit_stack = None
             self.session = None
 
             # Deactivate finalizer since we've manually cleaned up
