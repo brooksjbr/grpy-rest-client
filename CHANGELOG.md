@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.6.0 (2025-04-26)
+
+### Features
+
+- **release**: Improve idx paging
+  ([`d44cf3f`](https://github.com/brooksjbr/grpy-rest-client/commit/d44cf3f843de59c61b370c56ee50c8a5c20a6ce7))
+
+
 ## v0.5.0 (2025-04-26)
 
 ### Features
