@@ -126,7 +126,7 @@ class PageNumberPaginationStrategy(PaginationStrategy):
         """Initialize the page number pagination strategy.
 
         Args:
-            page_index_starts_at_zero: Pagination 0-indexed (True) or 1-indexed (False)
+            page_index_starts_at_zero:0-indexed pagination (True) or 1-indexed pagination (False)
             page_param_name: The name of the page parameter used in requests
             *args: Additional positional arguments for the parent class
             **kwargs: Additional keyword arguments for the parent class
@@ -134,8 +134,39 @@ class PageNumberPaginationStrategy(PaginationStrategy):
         super().__init__(*args, **kwargs)
         self.page_index_starts_at_zero = page_index_starts_at_zero
         self.page_param_name = page_param_name
-        self.logger.debug(f"page_index_starts_at_zero={page_index_starts_at_zero}")
+        self.logger.debug(f"Initialized with page_index_starts_at_zero={page_index_starts_at_zero}")
         self.logger.debug(f"page_param_name={page_param_name}")
+
+    def _validate_page_number(self, page_value: Any) -> Optional[int]:
+        """Validate and convert a page number value.
+
+        Args:
+            page_value: The page value to validate and convert
+
+        Returns:
+            The validated page number as an integer, or None if invalid
+        """
+        if page_value is None:
+            return None
+
+        try:
+            # Convert to integer
+            page_number = int(page_value)
+
+            # Validate that page number is non-negative
+            if page_number < 0:
+                self.logger.warning(f"Invalid negative page number: {page_number}")
+                return None
+
+            # For 1-indexed pagination, page must be at least 1
+            if not self.page_index_starts_at_zero and page_number < 1:
+                self.logger.warning(f"Invalid page number {page_number} for 1-indexed pagination")
+                return None
+
+            return page_number
+        except (ValueError, TypeError) as e:
+            self.logger.warning(f"Failed to convert page value '{page_value}' to integer: {str(e)}")
+            return None
 
     def get_next_page_info(
         self, response_json: Dict[str, Any], current_params: Dict[str, Any]
@@ -143,6 +174,7 @@ class PageNumberPaginationStrategy(PaginationStrategy):
         """Check if there are more pages based on page numbers.
 
         Handles both 0-indexed and 1-indexed pagination systems based on configuration.
+        Properly handles edge cases like totalPages=0 or negative page numbers.
         """
         self.logger.debug("Determining next page info using page number strategy")
         next_params = current_params.copy()
@@ -162,41 +194,63 @@ class PageNumberPaginationStrategy(PaginationStrategy):
 
         # Determine if there are more pages based on page numbers
         has_more = False
+
+        # Handle the case where totalPages is 0
+        if total_pages == 0:
+            self.logger.debug("Total pages is 0, no more pages available")
+            return False, next_params
+
         if current_page is not None and total_pages is not None:
             try:
                 # Get the current page from parameters if available
                 param_page = current_params.get(self.page_param_name)
                 self.logger.debug(f"Page from parameters: {param_page}")
 
-                # Use the page from parameters if it exists, otherwise use the one from response
-                effective_current_page = param_page if param_page is not None else current_page
-                self.logger.debug(f"Using effective current page: {effective_current_page}")
+                # Validate and convert page numbers
+                validated_param_page = self._validate_page_number(param_page)
+                validated_current_page = self._validate_page_number(current_page)
+                validated_total_pages = self._validate_page_number(total_pages)
 
-                # Convert to integers for comparison (if they're strings)
-                if isinstance(effective_current_page, str):
-                    effective_current_page = int(effective_current_page)
-                if isinstance(total_pages, str):
-                    total_pages = int(total_pages)
+                # Handle edge case: totalPages is 0 or None
+                if validated_total_pages is None or validated_total_pages == 0:
+                    self.logger.debug(f"Total pages is {total_pages}, no more pages available")
+                    return False, next_params
+
+                # Use the page from parameters if it exists and is valid, otherwise use the one from response
+                effective_current_page = (
+                    validated_param_page
+                    if validated_param_page is not None
+                    else validated_current_page
+                )
+
+                # Handle edge case: No valid current page
+                if effective_current_page is None:
+                    self.logger.error("No valid current page found in parameters or response")
+                    return False, next_params
+
+                self.logger.debug(f"Using effective current page: {effective_current_page}")
 
                 # Check if there are more pages based on indexing type
                 if self.page_index_starts_at_zero:
                     # For 0-indexed pagination (pages start at 0)
-                    has_more = effective_current_page < total_pages - 1
-                    self.logger.debug(
-                        f"Using 0-indexed pagination: current={effective_current_page}, total={total_pages}"
-                    )
+                    # Handle edge case: current page is the last page or beyond
+                    if effective_current_page >= validated_total_pages - 1:
+                        has_more = False
+                    else:
+                        has_more = True
                 else:
                     # For 1-indexed pagination (pages start at 1)
-                    has_more = effective_current_page < total_pages
-                    self.logger.debug(
-                        f"Using 1-indexed pagination: current={effective_current_page}, total={total_pages}"
-                    )
+                    # Handle edge case: current page is the last page or beyond
+                    if effective_current_page >= validated_total_pages:
+                        has_more = False
+                    else:
+                        has_more = True
 
                 self.logger.debug(f"Has more pages: {has_more}")
 
                 # If there are more pages, update the page parameter for the next request
                 if has_more:
-                    next_params[self.page_param_name] = int(effective_current_page) + 1
+                    next_params[self.page_param_name] = effective_current_page + 1
                     self.logger.info(f"Next page will be: {next_params[self.page_param_name]}")
             except (ValueError, TypeError) as e:
                 # Handle case where conversion to int fails
