@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.4.0 (2025-04-26)
+
+### Features
+
+- Try catch malformed paging response
+  ([`9a64621`](https://github.com/brooksjbr/grpy-rest-client/commit/9a646218c7711781990836b3992daaea0a8e75cc))
+
+### Refactoring
+
+- Rm dup code for extract_data method
+  ([`9719dfd`](https://github.com/brooksjbr/grpy-rest-client/commit/9719dfdb57c131873899fb6335f91f77ce58b317))
+
+
 ## v0.3.0 (2025-04-25)
 
 ### Chores
