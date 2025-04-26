@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.7.0 (2025-04-26)
+
+### Features
+
+- **release**: Validate page number values
+  ([`82df107`](https://github.com/brooksjbr/grpy-rest-client/commit/82df1073e46aebd5e1a8b9756780fbee4b0bd4ed))
+
+
 ## v0.6.0 (2025-04-26)
 
 ### Features

@@ -5,7 +5,7 @@ requires = ["hatchling>=0.22", "hatch-vcs>=0.2"]
 
 [project]
 name = "grpy_rest_client"
-version = "0.6.0"
+version = "0.7.0"
 description = "A package for making HTTP requests."
 readme = "README.md"
 license = "MIT"
