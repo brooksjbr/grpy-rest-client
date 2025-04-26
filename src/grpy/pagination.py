@@ -47,18 +47,23 @@ class PaginationStrategy(ABC):
             retryable_status_codes=retryable_status_codes,
         )
 
-    @abstractmethod
     def extract_data(self, response_json: Dict[str, Any], data_key: Optional[str] = None) -> Any:
-        """Extract data items from the response.
+        """Extract data from response using the specified data key."""
+        if not data_key:
+            return response_json
 
-        Args:
-            response_json: The JSON response from the API
-            data_key: Optional key or path to extract data from (e.g., '_embedded.events')
+        # Handle nested keys with dot notation (e.g., '_embedded.events')
+        keys = data_key.split(".")
+        data = response_json
 
-        Returns:
-            The extracted data items
-        """
-        pass
+        for key in keys:
+            if isinstance(data, dict) and key in data:
+                data = data[key]
+            else:
+                # If key doesn't exist, return the full response
+                return response_json
+
+        return data
 
     @abstractmethod
     def get_next_page_info(
@@ -97,24 +102,6 @@ class PageNumberPaginationStrategy(PaginationStrategy):
     This strategy handles APIs that use a page number and totalPages structure,
     typically found in APIs that return a "page" object with pagination metadata.
     """
-
-    def extract_data(self, response_json: Dict[str, Any], data_key: Optional[str] = None) -> Any:
-        """Extract data from response using the specified data key."""
-        if not data_key:
-            return response_json
-
-        # Handle nested keys with dot notation (e.g., '_embedded.events')
-        keys = data_key.split(".")
-        data = response_json
-
-        for key in keys:
-            if isinstance(data, dict) and key in data:
-                data = data[key]
-            else:
-                # If key doesn't exist, return the full response
-                return response_json
-
-        return data
 
     def get_next_page_info(
         self, response_json: Dict[str, Any], current_params: Dict[str, Any]
@@ -159,24 +146,6 @@ class HateoasPaginationStrategy(PaginationStrategy):
     This strategy handles APIs that follow HATEOAS principles by including
     navigation links in the response, typically in a "_links" object.
     """
-
-    def extract_data(self, response_json: Dict[str, Any], data_key: Optional[str] = None) -> Any:
-        """Extract data from response using the specified data key."""
-        if not data_key:
-            return response_json
-
-        # Handle nested keys with dot notation (e.g., '_embedded.events')
-        keys = data_key.split(".")
-        data = response_json
-
-        for key in keys:
-            if isinstance(data, dict) and key in data:
-                data = data[key]
-            else:
-                # If key doesn't exist, return the full response
-                return response_json
-
-        return data
 
     def get_next_page_info(
         self, response_json: Dict[str, Any], current_params: Dict[str, Any]
