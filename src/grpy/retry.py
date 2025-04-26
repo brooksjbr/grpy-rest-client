@@ -1,7 +1,6 @@
 """Retry strategies for REST API clients."""
 
 import asyncio
-import logging
 import random
 from abc import ABC, abstractmethod
 from functools import wraps
@@ -9,7 +8,7 @@ from typing import Any, Callable, List, Optional, Type, TypeVar, cast
 
 import aiohttp
 
-logger = logging.getLogger(__name__)
+from .logging import DefaultLogger, Logger
 
 # Type variable for the return type of the decorated function
 T = TypeVar("T")
@@ -21,6 +20,22 @@ class RetryStrategy(ABC):
     This abstract class defines the interface that all retry strategies must implement.
     Different retry strategies can be used for different types of failures.
     """
+
+    def __init__(self, logger: Optional[Logger] = None):
+        """Initialize the retry strategy.
+
+        Args:
+            logger: Custom logger instance (uses DefaultLogger if None)
+        """
+        self.logger = logger or DefaultLogger(name="grpy-retry")
+
+    def set_logger(self, logger: Logger) -> None:
+        """Set a new logger for this retry strategy.
+
+        Args:
+            logger: The logger to use
+        """
+        self.logger = logger
 
     @abstractmethod
     async def execute_with_retry(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
@@ -53,6 +68,7 @@ class ExponentialBackoffRetry(RetryStrategy):
         jitter: bool = True,
         retryable_exceptions: Optional[List[Type[Exception]]] = None,
         retryable_status_codes: Optional[List[int]] = None,
+        logger: Optional[Logger] = None,
     ):
         """Initialize the exponential backoff retry strategy.
 
@@ -65,6 +81,7 @@ class ExponentialBackoffRetry(RetryStrategy):
             retryable_exceptions: List of exception types that should trigger a retry
             retryable_status_codes: List of HTTP status codes that should trigger a retry
         """
+        super().__init__(logger=logger)
         self.max_retries = max_retries
         self.initial_delay = initial_delay
         self.max_delay = max_delay
@@ -96,7 +113,11 @@ class ExponentialBackoffRetry(RetryStrategy):
         delay = min(self.max_delay, self.initial_delay * (self.backoff_factor**attempt))
         if self.jitter:
             # Add jitter by multiplying by a random value between 0.5 and 1.5
-            delay *= 0.5 + random.random()
+            jitter_factor = 0.5 + random.random()
+            delay *= jitter_factor
+            self.logger.debug(f"Applied jitter factor {jitter_factor:.2f} to delay")
+
+        self.logger.debug(f"Calculated retry delay: {delay:.2f}s for attempt {attempt}")
         return delay
 
     async def execute_with_retry(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
@@ -113,17 +134,23 @@ class ExponentialBackoffRetry(RetryStrategy):
         Raises:
             The last exception encountered if all retries fail
         """
+        self.logger.debug(f"Starting execution with retry for {func.__name__}")
+        self.logger.debug(f"Max retries: {self.max_retries}, Initial delay: {self.initial_delay}s")
+
         last_exception = None
         attempt = 0
 
         while attempt <= self.max_retries:
             try:
+                self.logger.debug(f"Executing attempt {attempt + 1}/{self.max_retries + 1}")
                 result = await func(*args, **kwargs)
 
                 # Check if the result is an aiohttp.ClientResponse
                 if isinstance(result, aiohttp.ClientResponse):
+                    self.logger.debug(f"Received response with status code: {result.status}")
+
                     if result.status in self.retryable_status_codes:
-                        logger.warning(
+                        self.logger.warning(
                             f"Received retryable status code {result.status} on attempt {attempt + 1}"
                         )
                         last_exception = aiohttp.ClientResponseError(
@@ -133,33 +160,40 @@ class ExponentialBackoffRetry(RetryStrategy):
                             message=f"HTTP {result.status}",
                         )
                     else:
+                        self.logger.info(f"Request succeeded with status code {result.status}")
                         return result
                 else:
+                    self.logger.info(f"Function {func.__name__} executed successfully")
                     return result
 
             except tuple(self.retryable_exceptions) as e:
                 last_exception = e
-                logger.warning(
+                self.logger.warning(
                     f"Retry attempt {attempt + 1}/{self.max_retries + 1} failed: {str(e)}"
                 )
 
             # If this was the last attempt, raise the exception
             if attempt == self.max_retries:
+                self.logger.error(f"All {self.max_retries + 1} retry attempts failed")
                 break
 
             # Calculate delay for the next retry
             delay = self._calculate_delay(attempt)
-            logger.info(f"Retrying in {delay:.2f} seconds...")
+            self.logger.info(f"Retrying in {delay:.2f} seconds...")
             await asyncio.sleep(delay)
             attempt += 1
 
         # If we've exhausted all retries, raise the last exception
         if last_exception:
-            logger.error(f"All {self.max_retries + 1} retry attempts failed")
+            self.logger.error(
+                f"All {self.max_retries + 1} retry attempts failed: {str(last_exception)}"
+            )
             raise last_exception
 
         # This should never happen if the function always returns or raises
-        raise RuntimeError("Unexpected state in retry logic")
+        error_msg = "Unexpected state in retry logic"
+        self.logger.critical(error_msg)
+        raise RuntimeError(error_msg)
 
 
 def with_retry(
