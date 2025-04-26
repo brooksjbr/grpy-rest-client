@@ -120,10 +120,30 @@ class PageNumberPaginationStrategy(PaginationStrategy):
     typically found in APIs that return a "page" object with pagination metadata.
     """
 
+    def __init__(
+        self, page_index_starts_at_zero: bool = True, page_param_name: str = "page", *args, **kwargs
+    ):
+        """Initialize the page number pagination strategy.
+
+        Args:
+            page_index_starts_at_zero: Pagination 0-indexed (True) or 1-indexed (False)
+            page_param_name: The name of the page parameter used in requests
+            *args: Additional positional arguments for the parent class
+            **kwargs: Additional keyword arguments for the parent class
+        """
+        super().__init__(*args, **kwargs)
+        self.page_index_starts_at_zero = page_index_starts_at_zero
+        self.page_param_name = page_param_name
+        self.logger.debug(f"page_index_starts_at_zero={page_index_starts_at_zero}")
+        self.logger.debug(f"page_param_name={page_param_name}")
+
     def get_next_page_info(
         self, response_json: Dict[str, Any], current_params: Dict[str, Any]
     ) -> Tuple[bool, Dict[str, Any]]:
-        """Check if there are more pages based on page numbers."""
+        """Check if there are more pages based on page numbers.
+
+        Handles both 0-indexed and 1-indexed pagination systems based on configuration.
+        """
         self.logger.debug("Determining next page info using page number strategy")
         next_params = current_params.copy()
 
@@ -145,7 +165,7 @@ class PageNumberPaginationStrategy(PaginationStrategy):
         if current_page is not None and total_pages is not None:
             try:
                 # Get the current page from parameters if available
-                param_page = current_params.get("page")
+                param_page = current_params.get(self.page_param_name)
                 self.logger.debug(f"Page from parameters: {param_page}")
 
                 # Use the page from parameters if it exists, otherwise use the one from response
@@ -158,15 +178,26 @@ class PageNumberPaginationStrategy(PaginationStrategy):
                 if isinstance(total_pages, str):
                     total_pages = int(total_pages)
 
-                # There are more pages if the current page is less than total pages - 1
-                has_more = effective_current_page < total_pages - 1
+                # Check if there are more pages based on indexing type
+                if self.page_index_starts_at_zero:
+                    # For 0-indexed pagination (pages start at 0)
+                    has_more = effective_current_page < total_pages - 1
+                    self.logger.debug(
+                        f"Using 0-indexed pagination: current={effective_current_page}, total={total_pages}"
+                    )
+                else:
+                    # For 1-indexed pagination (pages start at 1)
+                    has_more = effective_current_page < total_pages
+                    self.logger.debug(
+                        f"Using 1-indexed pagination: current={effective_current_page}, total={total_pages}"
+                    )
 
                 self.logger.debug(f"Has more pages: {has_more}")
 
                 # If there are more pages, update the page parameter for the next request
                 if has_more:
-                    next_params["page"] = int(effective_current_page) + 1
-                    self.logger.info(f"Next page will be: {next_params['page']}")
+                    next_params[self.page_param_name] = int(effective_current_page) + 1
+                    self.logger.info(f"Next page will be: {next_params[self.page_param_name]}")
             except (ValueError, TypeError) as e:
                 # Handle case where conversion to int fails
                 self.logger.error(f"Error calculating pagination: {str(e)}")
