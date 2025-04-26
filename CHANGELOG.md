@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.8.0 (2025-04-26)
+
+### Features
+
+- Add paging protocol
+  ([`5c2d66e`](https://github.com/brooksjbr/grpy-rest-client/commit/5c2d66e9db1d7d590ce5c353fdc489f1925db32e))
+
+### Refactoring
+
+- Session mgmt to reduce complexity
+  ([`52b3e3d`](https://github.com/brooksjbr/grpy-rest-client/commit/52b3e3da3cc31477bd50f84e396442175954ce37))
+
+
 ## v0.7.0 (2025-04-26)
 
 ### Features
