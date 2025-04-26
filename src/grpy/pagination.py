@@ -110,32 +110,41 @@ class PageNumberPaginationStrategy(PaginationStrategy):
         next_params = current_params.copy()
 
         # Extract pagination information from the response
-        page_info = response_json.get("page", {})
-        current_page = page_info.get("number")
-        total_pages = page_info.get("totalPages")
+        try:
+            page_info = response_json.get("page", {})
+            current_page = page_info.get("number")
+            total_pages = page_info.get("totalPages")
+        except (TypeError, AttributeError):
+            # Handle case where page info is not a dict or is malformed
+            current_page = None
+            total_pages = None
 
         # Determine if there are more pages based on page numbers
         has_more = False
         if current_page is not None and total_pages is not None:
-            # Get the current page from parameters if available
-            param_page = current_params.get("page")
+            try:
+                # Get the current page from parameters if available
+                param_page = current_params.get("page")
 
-            # Use the page from parameters if it exists, otherwise use the one from response
-            effective_current_page = param_page if param_page is not None else current_page
+                # Use the page from parameters if it exists, otherwise use the one from response
+                effective_current_page = param_page if param_page is not None else current_page
 
-            # Convert to integers for comparison (if they're strings)
-            if isinstance(effective_current_page, str):
-                effective_current_page = int(effective_current_page)
-            if isinstance(total_pages, str):
-                total_pages = int(total_pages)
+                # Convert to integers for comparison (if they're strings)
+                if isinstance(effective_current_page, str):
+                    effective_current_page = int(effective_current_page)
+                if isinstance(total_pages, str):
+                    total_pages = int(total_pages)
 
-            # There are more pages if the current page is less than total pages - 1
-            # (since page numbers are 0-indexed in the test data)
-            has_more = effective_current_page < total_pages - 1
+                # There are more pages if the current page is less than total pages - 1
+                # (since page numbers are 0-indexed in the test data)
+                has_more = effective_current_page < total_pages - 1
 
-            # If there are more pages, update the page parameter for the next request
-            if has_more:
-                next_params["page"] = int(effective_current_page) + 1
+                # If there are more pages, update the page parameter for the next request
+                if has_more:
+                    next_params["page"] = int(effective_current_page) + 1
+            except (ValueError, TypeError):
+                # Handle case where conversion to int fails
+                has_more = False
 
         return has_more, next_params
 
