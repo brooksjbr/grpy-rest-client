@@ -49,6 +49,11 @@ class TestRestClientInitialization:
 
         assert client.timeout_obj.total == 30
 
+    def test_init_includes_exit_stack(self, base_url):
+        client = RestClient(url=base_url)
+        assert client._exit_stack is not None
+        assert client.session is None
+
 
 class TestRestClientValidation:
     def test_validate_http_method_valid(self):
@@ -89,13 +94,98 @@ class TestRestClientContextManager:
     @pytest.mark.asyncio
     async def test_context_manager(self, base_url):
         session = None
+
         async with RestClient(url=base_url) as client:
             assert client.session is not None
             assert not client.session.closed
+            assert client._exit_stack is not None
             session = client.session
 
         # After exiting context, session should be closed
         assert session.closed
+        # Exit stack should be None after context exit
+        assert client._exit_stack is None
+        assert client.session is None
+
+    @pytest.mark.asyncio
+    async def test_external_session_reuse(self, base_url, mock_client_session):
+        # Create a mock session
+        mock_session = mock_client_session()
+
+        # Use the session with a client
+        async with RestClient(url=base_url, session=mock_session) as client:
+            assert client.session is mock_session
+            assert not mock_session.closed
+
+        # After client context exits, external session should still be open
+        # This is the key test - the RestClient should not close an external session
+        assert not mock_session.closed
+
+        # Manually close the session
+        await mock_session.close()
+        assert mock_session.closed
+
+    @pytest.mark.asyncio
+    async def test_error_handling_during_cleanup(self, base_url):
+        """Test that errors during cleanup are handled properly."""
+        # Create a client
+        client = RestClient(url=base_url)
+
+        # Create a custom exit stack that will raise an exception on aclose
+        class ErrorExitStack:
+            def __init__(self):
+                self.aclose_called = False
+
+            async def aclose(self):
+                self.aclose_called = True
+                raise Exception("Cleanup error")
+
+            async def enter_async_context(self, context_manager):
+                # Just return the context_manager directly without actually entering it
+                # This is a simplified version just for testing
+                return context_manager
+
+        # Replace the exit stack with our custom one
+        error_stack = ErrorExitStack()
+        client._exit_stack = error_stack
+
+        # Create a mock session instead of a real ClientSession
+        mock_session = MagicMock()
+        mock_session.closed = False
+        client.session = mock_session
+
+        # Use the client in a context manager and catch the expected exception
+        try:
+            async with client:
+                pass  # Just enter and exit the context
+        except Exception as e:
+            # Verify it's the expected exception
+            assert str(e) == "Cleanup error"
+
+        # Verify aclose was called
+        assert error_stack.aclose_called
+
+        # Verify resources are cleaned up even with error
+        # Note: In the real implementation, these should be set to None in __aexit__
+        # even if an exception occurs during cleanup
+        assert client._exit_stack is None
+        assert client.session is None
+
+    @pytest.mark.asyncio
+    async def test_cleanup_after_context_exit(self, base_url):
+        """Test that resources are cleaned up after context exit."""
+        # Create a client
+        client = RestClient(url=base_url)
+
+        # Enter the client context
+        async with client:
+            # Verify resources are created
+            assert client.session is not None
+            assert client._exit_stack is not None
+
+        # Verify resources are cleaned up
+        assert client.session is None
+        assert client._exit_stack is None
 
 
 class TestRestClientRequests:
@@ -219,6 +309,64 @@ class TestRestClientRequests:
 
         # Verify the error details
         assert excinfo.value.status == 404
+
+    @pytest.mark.asyncio
+    async def test_handle_request_with_context_manager(
+        self, base_url, endpoint, enhanced_mock_response_factory, mock_client_session
+    ):
+        """Test that handle_request works properly with the context manager."""
+        # Create a mock response
+        mock_response = enhanced_mock_response_factory(json_data={"data": "test"})
+
+        # Create a mock session
+        mock_session = mock_client_session(response=mock_response)
+
+        # Create a client without setting the session
+        client = RestClient(url=base_url, endpoint=endpoint)
+
+        # Use the client in a context manager
+        async with client:
+            # Replace the auto-created session with our mock for testing
+            original_session = client.session
+            client.session = mock_session
+
+            # Execute the request
+            response = await client.handle_request()
+
+            # Verify the request was made correctly
+            mock_session.request.assert_called_once_with(
+                method="GET",
+                url=urljoin(base_url, endpoint),
+                headers=client.headers,
+                params={},
+                timeout=client.timeout_obj,
+            )
+
+            assert response == mock_response
+
+            # Restore the original session to avoid cleanup issues
+            client.session = original_session
+
+    @pytest.mark.asyncio
+    async def test_exit_stack_session_management(self, base_url):
+        """Test that AsyncExitStack properly manages the session lifecycle."""
+        # Create a client
+        client = RestClient(url=base_url)
+
+        # Enter the client context
+        async with client:
+            # Verify the exit stack and session are created
+            assert client._exit_stack is not None
+            assert client.session is not None
+            assert not client.session.closed
+
+            # Store references for verification after context exit
+            session = client.session
+
+        # After exiting the context, resources should be cleaned up
+        assert client._exit_stack is None
+        assert client.session is None
+        assert session.closed
 
 
 class TestRestClientUtilities:
