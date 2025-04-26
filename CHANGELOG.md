@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.5.0 (2025-04-26)
+
+### Features
+
+- **release**: Add logging to pagination and retry
+  ([`c22170a`](https://github.com/brooksjbr/grpy-rest-client/commit/c22170a9853c434c6d2f09245c984784a6264b2a))
+
+
 ## v0.4.0 (2025-04-26)
 
 ### Features
