@@ -1,6 +1,14 @@
 # CHANGELOG
 
 
+## v0.9.0 (2025-04-26)
+
+### Features
+
+- **release**: Initial code for paging mgmr
+  ([`ccac686`](https://github.com/brooksjbr/grpy-rest-client/commit/ccac686748def735bf6756420239704a527ce759))
+
+
 ## v0.8.0 (2025-04-26)
 
 ### Features
