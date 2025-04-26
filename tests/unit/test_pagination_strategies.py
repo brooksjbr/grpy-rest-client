@@ -117,3 +117,73 @@ class TestPageNumberPaginationStrategy:
 
         assert has_more is False
         assert next_params == {"page": 0}  # Params unchanged
+
+    def test_get_next_page_info_malformed_page_info_dict(self, strategy):
+        """Test handling of malformed page info where 'page' is not a dictionary."""
+        # Response with 'page' as a string instead of a dictionary
+        response = {"items": [{"id": "item1"}], "page": "invalid"}
+        current_params = {"page": 0}
+
+        has_more, next_params = strategy.get_next_page_info(response, current_params)
+
+        assert has_more is False
+        assert next_params == {"page": 0}  # Params unchanged
+
+    def test_get_next_page_info_none_page_info(self, strategy):
+        """Test handling of None page info."""
+        # Response with 'page' as None
+        response = {"items": [{"id": "item1"}], "page": None}
+        current_params = {"page": 0}
+
+        has_more, next_params = strategy.get_next_page_info(response, current_params)
+
+        assert has_more is False
+        assert next_params == {"page": 0}  # Params unchanged
+
+    def test_get_next_page_info_missing_required_fields(self, strategy):
+        """Test handling of page info missing required fields."""
+        # Response with page info missing number and totalPages
+        response = {"items": [{"id": "item1"}], "page": {"size": 10}}
+        current_params = {"page": 0}
+
+        has_more, next_params = strategy.get_next_page_info(response, current_params)
+
+        assert has_more is False
+        assert next_params == {"page": 0}  # Params unchanged
+
+    def test_get_next_page_info_malformed_page_values(self, strategy):
+        """Test handling of page info with malformed values."""
+        # Response with non-numeric values for page fields that can be converted to int
+        response = {
+            "items": [{"id": "item1"}],
+            "page": {
+                "number": "1",  # This can be converted to int
+                "totalPages": "3",  # This can be converted to int
+            },
+        }
+        current_params = {"page": 0}
+
+        # This should not raise an exception
+        has_more, next_params = strategy.get_next_page_info(response, current_params)
+
+        assert has_more is True
+        assert next_params == {"page": 1}  # Page incremented
+
+    def test_get_next_page_info_non_convertible_values(self, strategy):
+        """Test handling of page info with values that can't be converted to integers."""
+        # Response with non-numeric values for page fields
+        response = {
+            "items": [{"id": "item1"}],
+            "page": {
+                "number": 0,  # Valid number
+                "totalPages": "not-a-number",  # This will cause ValueError during int conversion
+            },
+        }
+        current_params = {"page": 0}
+
+        # We need to modify the implementation to handle this case
+        has_more, next_params = strategy.get_next_page_info(response, current_params)
+
+        # Since we can't properly compare, pagination should stop
+        assert has_more is False
+        assert next_params == {"page": 0}  # Params unchanged
