@@ -2,7 +2,7 @@
 Pagination strategies for handling different pagination formats in API responses.
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class PageNumberPaginationStrategy:
@@ -13,14 +13,16 @@ class PageNumberPaginationStrategy:
     with parameters like 'page' and 'size'.
     """
 
-    def __init__(self, zero_indexed: bool = True):
+    def __init__(self, page_index_starts_at_zero: bool = True, page_param_name: str = "page"):
         """
         Initialize the page number pagination strategy.
 
         Args:
-            zero_indexed: Whether page numbering starts at 0 (True) or 1 (False)
+            page_index_starts_at_zero: Whether page numbering starts at 0 (True) or 1 (False)
+            page_param_name: The name of the page parameter used in requests
         """
-        self.zero_indexed = zero_indexed
+        self.zero_indexed = page_index_starts_at_zero
+        self.page_param_name = page_param_name
 
     def get_next_page_info(
         self, response: Dict[str, Any], current_params: Dict[str, Any]
@@ -38,8 +40,15 @@ class PageNumberPaginationStrategy:
                 - Dict with parameters for the next page request
         """
         page_info = response.get("page", {})
-        current_page = page_info.get("number", 0)
-        total_pages = page_info.get("totalPages", 0)
+        if not isinstance(page_info, dict) or page_info is None:
+            return False, current_params.copy()
+
+        try:
+            current_page = int(page_info.get("number", 0))
+            total_pages = int(page_info.get("totalPages", 0))
+        except (ValueError, TypeError):
+            # If conversion fails, assume no more pages
+            return False, current_params.copy()
 
         # Adjust for 1-indexed pagination if needed
         if not self.zero_indexed:
@@ -50,8 +59,12 @@ class PageNumberPaginationStrategy:
         has_more = current_page_adjusted < total_pages
 
         next_params = current_params.copy()
+        page_param = self.page_param_name  # Use the configured page parameter name
+
         if has_more:
-            next_params["page"] = current_page + 1
+            # Use the current_params page value for incrementing, not the response page value
+            current_param_page = next_params.get(page_param, 0)
+            next_params[page_param] = current_param_page + 1
 
         return has_more, next_params
 
@@ -66,6 +79,34 @@ class PageNumberPaginationStrategy:
             List of items from the response
         """
         return response.get("items", [])
+
+    def extract_data(self, response: Dict[str, Any], key_path: Optional[str]) -> Any:
+        """
+        Extract data from a response using a key path.
+
+        Args:
+            response: The response data
+            key_path: Dot-separated path to the data (e.g., "_embedded.events")
+                     If None, returns the full response
+
+        Returns:
+            The extracted data or the full response if key_path is None
+        """
+        if key_path is None:
+            return response
+
+        # Handle dot notation for nested keys
+        keys = key_path.split(".")
+        data = response
+
+        for key in keys:
+            if isinstance(data, dict) and key in data:
+                data = data[key]
+            else:
+                # If key doesn't exist, return the full response
+                return response
+
+        return data
 
 
 class HateoasPaginationStrategy:

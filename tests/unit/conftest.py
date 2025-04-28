@@ -5,7 +5,7 @@ import pytest
 from aiohttp import ClientSession
 
 from src.grpy.rest_client import RestClient
-from src.grpy.retry import ExponentialBackoffRetry
+from src.grpy.retry_manager import ExponentialBackoffRetryPolicy
 
 
 @pytest.fixture
@@ -297,7 +297,7 @@ def retry_strategy_factory():
     """
 
     def _create_strategy(
-        strategy_class=ExponentialBackoffRetry,
+        strategy_class=ExponentialBackoffRetryPolicy,
         max_retries=3,
         initial_delay=0.01,  # Fast for testing
         max_delay=1.0,  # Fast for testing
