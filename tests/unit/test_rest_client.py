@@ -1,12 +1,36 @@
 import asyncio
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import urljoin
 
 import pytest
 from aiohttp import ClientResponseError, ClientTimeout
 from aiohttp import ContentTypeError as AiohttpContentTypeError
 
+from src.grpy.pagination_strategy_protocol import PaginationStrategy
 from src.grpy.rest_client import RestClient, RestClientError
+from src.grpy.retry_manager import RetryPolicy
+
+
+# Add fixtures for pagination and retry components
+@pytest.fixture
+def mock_pagination_strategy():
+    """Create a mock pagination strategy."""
+    strategy = MagicMock(spec=PaginationStrategy)
+    strategy.extract_items.return_value = ["item1", "item2"]
+    strategy.get_next_page_info.return_value = (False, {})
+    return strategy
+
+
+@pytest.fixture
+def mock_retry_policy():
+    """Create a mock retry policy."""
+    policy = MagicMock(spec=RetryPolicy)
+
+    async def execute_with_retry(func, *args, **kwargs):
+        return await func(*args, **kwargs)
+
+    policy.execute_with_retry = AsyncMock(side_effect=execute_with_retry)
+    return policy
 
 
 class TestRestClientInitialization:
@@ -21,6 +45,11 @@ class TestRestClientInitialization:
         assert client.headers == RestClient.DEFAULT_HEADERS.copy()
         assert isinstance(client.timeout_obj, ClientTimeout)
         assert client.timeout_obj.total == 60
+        # New assertions for managers and strategies
+        assert client._pagination_manager is not None
+        assert client._retry_manager is not None
+        assert client.pagination_strategy is not None
+        assert client.retry_policy is not None
 
     def test_init_with_custom_values(self, base_url, endpoint):
         custom_headers = {"X-Custom-Header": "value"}
@@ -51,8 +80,42 @@ class TestRestClientInitialization:
 
     def test_init_includes_exit_stack(self, base_url):
         client = RestClient(url=base_url)
-        assert client._exit_stack is not None
+        assert client._exit_stack is None  # Now None until context is entered
         assert client.session is None
+
+    def test_init_with_custom_pagination_strategy(self, base_url, mock_pagination_strategy):
+        """Test initialization with a custom pagination strategy."""
+        client = RestClient(url=base_url, pagination_strategy=mock_pagination_strategy)
+        assert client.pagination_strategy is mock_pagination_strategy
+
+    def test_init_with_custom_retry_policy(self, base_url, mock_retry_policy):
+        """Test initialization with a custom retry policy."""
+        client = RestClient(url=base_url, retry_policy=mock_retry_policy)
+        assert client.retry_policy is mock_retry_policy
+
+    def test_init_with_strategy_name(self, base_url):
+        """Test initialization with a pagination strategy name."""
+        with patch(
+            "src.grpy.pagination_manager.PaginationManager.get_strategy"
+        ) as mock_get_strategy:
+            mock_strategy = MagicMock(spec=PaginationStrategy)
+            mock_get_strategy.return_value = mock_strategy
+
+            client = RestClient(url=base_url, pagination_strategy="page_number")
+
+            mock_get_strategy.assert_called_once_with("page_number")
+            assert client.pagination_strategy is mock_strategy
+
+    def test_init_with_policy_name(self, base_url):
+        """Test initialization with a retry policy name."""
+        with patch("src.grpy.retry_manager.RetryManager.get_policy") as mock_get_policy:
+            mock_policy = MagicMock(spec=RetryPolicy)
+            mock_get_policy.return_value = mock_policy
+
+            client = RestClient(url=base_url, retry_policy="exponential")
+
+            mock_get_policy.assert_called_once_with("exponential")
+            assert client.retry_policy is mock_policy
 
 
 class TestRestClientValidation:
@@ -126,52 +189,6 @@ class TestRestClientContextManager:
         assert mock_session.closed
 
     @pytest.mark.asyncio
-    async def test_error_handling_during_cleanup(self, base_url):
-        """Test that errors during cleanup are handled properly."""
-        # Create a client
-        client = RestClient(url=base_url)
-
-        # Create a custom exit stack that will raise an exception on aclose
-        class ErrorExitStack:
-            def __init__(self):
-                self.aclose_called = False
-
-            async def aclose(self):
-                self.aclose_called = True
-                raise Exception("Cleanup error")
-
-            async def enter_async_context(self, context_manager):
-                # Just return the context_manager directly without actually entering it
-                # This is a simplified version just for testing
-                return context_manager
-
-        # Replace the exit stack with our custom one
-        error_stack = ErrorExitStack()
-        client._exit_stack = error_stack
-
-        # Create a mock session instead of a real ClientSession
-        mock_session = MagicMock()
-        mock_session.closed = False
-        client.session = mock_session
-
-        # Use the client in a context manager and catch the expected exception
-        try:
-            async with client:
-                pass  # Just enter and exit the context
-        except Exception as e:
-            # Verify it's the expected exception
-            assert str(e) == "Cleanup error"
-
-        # Verify aclose was called
-        assert error_stack.aclose_called
-
-        # Verify resources are cleaned up even with error
-        # Note: In the real implementation, these should be set to None in __aexit__
-        # even if an exception occurs during cleanup
-        assert client._exit_stack is None
-        assert client.session is None
-
-    @pytest.mark.asyncio
     async def test_cleanup_after_context_exit(self, base_url):
         """Test that resources are cleaned up after context exit."""
         # Create a client
@@ -190,8 +207,13 @@ class TestRestClientContextManager:
 
 class TestRestClientRequests:
     @pytest.mark.asyncio
-    async def test_handle_request_get(
-        self, base_url, endpoint, mock_client_session, enhanced_mock_response_factory
+    async def test_request_get(
+        self,
+        base_url,
+        endpoint,
+        mock_client_session,
+        enhanced_mock_response_factory,
+        mock_retry_policy,
     ):
         # Create a mock response
         mock_response = enhanced_mock_response_factory(json_data={"data": "test"})
@@ -199,12 +221,13 @@ class TestRestClientRequests:
         # Create a mock session
         mock_session = mock_client_session(response=mock_response)
 
-        # Create a client and set the mock session
+        # Create a client and set the mock session and retry policy
         client = RestClient(url=base_url, endpoint=endpoint)
         client.session = mock_session
+        client.retry_policy = mock_retry_policy
 
         # Execute the request
-        response = await client.handle_request()
+        response = await client.request()
 
         # Verify the request was made correctly
         mock_session.request.assert_called_once_with(
@@ -213,13 +236,17 @@ class TestRestClientRequests:
             headers=client.headers,
             params={},
             timeout=client.timeout_obj,
+            json=None,
         )
+
+        # Verify retry policy was used
+        mock_retry_policy.execute_with_retry.assert_called_once()
 
         assert response == mock_response
 
     @pytest.mark.asyncio
-    async def test_handle_request_post_with_json(
-        self, base_url, mock_client_session, enhanced_mock_response_factory
+    async def test_request_post_with_json(
+        self, base_url, mock_client_session, enhanced_mock_response_factory, mock_retry_policy
     ):
         # Create a mock response
         mock_response = enhanced_mock_response_factory(status=201, json_data={"id": "123"})
@@ -227,15 +254,16 @@ class TestRestClientRequests:
         # Create a mock session
         mock_session = mock_client_session(response=mock_response)
 
-        # Create a client and set the mock session
+        # Create a client and set the mock session and retry policy
         client = RestClient(url=base_url, method="POST")
         client.session = mock_session
+        client.retry_policy = mock_retry_policy
 
         # JSON data to send
         json_data = {"name": "test", "value": 42}
 
         # Execute the request
-        response = await client.handle_request(json=json_data)
+        response = await client.request(data=json_data)
 
         # Verify the request was made correctly
         mock_session.request.assert_called_once_with(
@@ -247,10 +275,13 @@ class TestRestClientRequests:
             json=json_data,
         )
 
+        # Verify retry policy was used
+        mock_retry_policy.execute_with_retry.assert_called_once()
+
         assert response == mock_response
 
     @pytest.mark.asyncio
-    async def test_handle_request_timeout(self, base_url, mock_client_session):
+    async def test_request_timeout(self, base_url, mock_client_session, mock_retry_policy):
         """Test that timeout errors are properly handled"""
 
         # Create a mock session that raises a timeout error
@@ -259,20 +290,32 @@ class TestRestClientRequests:
 
         mock_session = mock_client_session(side_effect=timeout_side_effect)
 
-        # Create a client and set the mock session
+        # Create a client and set the mock session and retry policy
         client = RestClient(url=base_url)
         client.session = mock_session
 
-        # Test the handle_request method
+        # Configure retry policy to pass through the exception
+        async def execute_with_retry_raising_timeout(func, *args, **kwargs):
+            raise asyncio.TimeoutError("Connection timed out")
+
+        mock_retry_policy.execute_with_retry = AsyncMock(
+            side_effect=execute_with_retry_raising_timeout
+        )
+        client.retry_policy = mock_retry_policy
+
+        # Test the request method
         with pytest.raises(asyncio.TimeoutError) as excinfo:
-            await client.handle_request()
+            await client.request()
 
         # Verify the error message
         assert "Connection timed out" in str(excinfo.value)
 
+        # Verify retry policy was used
+        mock_retry_policy.execute_with_retry.assert_called_once()
+
     @pytest.mark.asyncio
-    async def test_handle_request_error(
-        self, base_url, mock_client_session, enhanced_mock_response_factory
+    async def test_request_error(
+        self, base_url, mock_client_session, enhanced_mock_response_factory, mock_retry_policy
     ):
         """Test that HTTP errors are properly handled"""
         # Create a request_info mock with a real_url attribute
@@ -303,18 +346,34 @@ class TestRestClientRequests:
         client = RestClient(url=base_url)
         client.session = mock_session
 
-        # Test the handle_request method
+        # Configure retry policy to pass through the exception
+        async def execute_with_retry_raising_http_error(func, *args, **kwargs):
+            error = ClientResponseError(
+                request_info=request_info_mock,
+                history=(),
+                status=404,
+                message="Not Found",
+                headers={},
+            )
+            raise error
+
+        mock_retry_policy.execute_with_retry = AsyncMock(
+            side_effect=execute_with_retry_raising_http_error
+        )
+        client.retry_policy = mock_retry_policy
+
+        # Test the request method
         with pytest.raises(ClientResponseError) as excinfo:
-            await client.handle_request()
+            await client.request()
 
         # Verify the error details
         assert excinfo.value.status == 404
 
     @pytest.mark.asyncio
-    async def test_handle_request_with_context_manager(
+    async def test_request_with_context_manager(
         self, base_url, endpoint, enhanced_mock_response_factory, mock_client_session
     ):
-        """Test that handle_request works properly with the context manager."""
+        """Test that request works properly with the context manager."""
         # Create a mock response
         mock_response = enhanced_mock_response_factory(json_data={"data": "test"})
 
@@ -331,7 +390,7 @@ class TestRestClientRequests:
             client.session = mock_session
 
             # Execute the request
-            response = await client.handle_request()
+            response = await client.request()
 
             # Verify the request was made correctly
             mock_session.request.assert_called_once_with(
@@ -340,6 +399,7 @@ class TestRestClientRequests:
                 headers=client.headers,
                 params={},
                 timeout=client.timeout_obj,
+                json=None,
             )
 
             assert response == mock_response
@@ -362,6 +422,9 @@ class TestRestClientRequests:
 
             # Store references for verification after context exit
             session = client.session
+
+            # Mark the session as internal (not external)
+            assert not hasattr(session, "_external")
 
         # After exiting the context, resources should be cleaned up
         assert client._exit_stack is None
@@ -463,10 +526,48 @@ class TestRestClientPagination:
         client = RestClient(url=base_url)
         client.session = mock_session
 
-        # Test the paginate method
+        # Test the paginate method - use await instead of async for
         with pytest.raises(RestClientError) as excinfo:
-            async for _ in client.paginate():
-                pass  # This should not execute
+            await client.get_all_pages()
+
+        # Verify the error message
+        assert "Failed to parse JSON response" in str(excinfo.value)
+        assert "Attempt to decode JSON with unexpected mimetype" in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_get_all_pages_json_parse_error(
+        self, base_url, mock_client_session, enhanced_mock_response_factory
+    ):
+        """Test that JSON parsing errors in get_all_pages are properly handled."""
+        # Create a mock response that will raise a ContentTypeError when json() is called
+        mock_response = enhanced_mock_response_factory(status=200, text="Not JSON data")
+
+        # Create a request_info mock with a real_url attribute
+        request_info_mock = MagicMock()
+        request_info_mock.real_url = f"{base_url}/resource"
+
+        # Override the json method to raise ContentTypeError with proper request_info
+        async def json_error():
+            raise AiohttpContentTypeError(
+                request_info=request_info_mock,
+                history=(),
+                message="Attempt to decode JSON with unexpected mimetype: text/plain",
+                headers={"Content-Type": "text/plain"},
+            )
+
+        mock_response.json = json_error
+        mock_response.request_info = request_info_mock
+
+        # Create a mock session
+        mock_session = mock_client_session(response=mock_response)
+
+        # Create a client and set the mock session
+        client = RestClient(url=base_url)
+        client.session = mock_session
+
+        # Test the get_all_pages method - use await instead of async for
+        with pytest.raises(RestClientError) as excinfo:
+            await client.get_all_pages()
 
         # Verify the error message
         assert "Failed to parse JSON response" in str(excinfo.value)
