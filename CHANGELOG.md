@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v0.10.0 (2025-04-28)
+
+### Chores
+
+- Remove older paging and retry files
+  ([`ab95340`](https://github.com/brooksjbr/grpy-rest-client/commit/ab95340909ffec8b661bfb466f781875b9f3bdee))
+
+### Features
+
+- Mgner integration with rest client
+  ([`6928868`](https://github.com/brooksjbr/grpy-rest-client/commit/6928868ca5290d753e5c78415112123844632b20))
+
+
 ## v0.9.0 (2025-04-26)
 
 ### Features
