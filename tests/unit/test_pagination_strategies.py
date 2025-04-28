@@ -1,6 +1,6 @@
 import pytest
 
-from src.grpy.pagination import PageNumberPaginationStrategy
+from src.grpy.pagination_strategies import PageNumberPaginationStrategy
 
 
 class TestPageNumberPaginationStrategy:
