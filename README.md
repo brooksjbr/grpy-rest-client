@@ -7,12 +7,30 @@ A Python package for making HTTP requests with support for asynchronous operatio
 
 ## Features
 
--   **Asynchronous HTTP Client**: Built on aiohttp for efficient asynchronous requests
--   **Pagination Support**: Multiple pagination strategies including:
+-   **Async-First Design**: Built on aiohttp for efficient asynchronous requests, optimized for high-throughput microservices
+-   **Comprehensive Pagination Support**:
+    -   Protocol-based design with multiple strategy implementations
     -   Page number pagination
     -   HATEOAS link-based pagination
--   **Retry Mechanisms**: Configurable retry strategies with exponential backoff
--   **Error Handling**: Comprehensive error handling and status code management
+    -   Configurable data extraction from nested responses
+-   **Advanced Retry Mechanisms**:
+    -   Policy registry with multiple retry strategies
+    -   Exponential backoff with configurable parameters
+    -   Fixed delay option
+    -   Intelligent retry decisions based on HTTP status codes
+-   **Robust Error Handling**:
+    -   Comprehensive exception handling with detailed logging
+    -   Status code management
+    -   Context-aware error reporting
+-   **Resource Management**:
+    -   Proper session lifecycle management with AsyncExitStack
+    -   Automatic cleanup of resources
+-   **Structured Logging**:
+
+    -   Configurable log levels and formats
+    -   Console and file output options
+    -   Contextual information for debugging
+
 -   **Type Safety**: Built with Pydantic for robust data validation
 
 ## Installation
@@ -46,14 +64,20 @@ source ~/venvs/grpy-rest-client/bin/activate
 
 ## Usage
 
-Here's a basic example of using the REST client:
+### Basic REST Client Usage
 
 ```python
-from grpy_rest_client import RestClient
+from grpy.rest_client import RestClient
+from grpy.logging import Logger
 
 async def main():
-    # Create a client with a base URL
-    async with RestClient(base_url="https://api.example.com") as client:
+    # Create a client with a base URL and custom logger
+    logger = Logger(name="my-app", level=Logger.DEBUG)
+
+    async with RestClient(
+        base_url="https://api.example.com",
+        logger=logger
+    ) as client:
         # Make a GET request
         response = await client.get("/resource")
         data = await response.json()
@@ -62,7 +86,8 @@ async def main():
         # Make a POST request with data
         response = await client.post(
             "/resource",
-            json={"name": "example"}
+            json={"name": "example"},
+            timeout=30  # Custom timeout in seconds
         )
         result = await response.json()
         print(result)
@@ -71,21 +96,115 @@ async def main():
 ### Pagination Example
 
 ```python
-from grpy_rest_client import RestClient
-from grpy_rest_client.pagination import PageNumberPaginationStrategy
+from grpy.rest_client import RestClient
+from grpy.pagination_strategies import PageNumberPaginationStrategy, HateoasPaginationStrategy
 
 async def main():
-    # Create a pagination strategy
-    pagination = PageNumberPaginationStrategy()
-
     # Create a client
     async with RestClient(base_url="https://api.example.com") as client:
-        # Get all pages of data
+        # Page number pagination example
+        page_strategy = PageNumberPaginationStrategy(
+            page_param="page",
+            size_param="size",
+            page_size=25
+        )
+
+        # Get all pages of data with page number pagination
         all_items = []
-        async for items in client.paginate("/resources", pagination_strategy=pagination):
+        async for items in client.paginate(
+            "/resources",
+            pagination_strategy=page_strategy,
+            params={"category": "books"}
+        ):
             all_items.extend(items)
 
-        print(f"Retrieved {len(all_items)} items")
+        print(f"Retrieved {len(all_items)} items using page number pagination")
+
+        # HATEOAS pagination example
+        hateoas_strategy = HateoasPaginationStrategy()
+
+        # Get all pages of data with HATEOAS pagination
+        all_events = []
+        async for events in client.paginate(
+            "/events",
+            pagination_strategy=hateoas_strategy,
+            data_key="_embedded.events"  # Extract data from nested structure
+        ):
+            all_events.extend(events)
+
+        print(f"Retrieved {len(all_events)} events using HATEOAS pagination")
+```
+
+### Retry Example
+
+```python
+from grpy.rest_client import RestClient
+from grpy.retry_policies import ExponentialBackoffRetryPolicy
+
+async def main():
+    # Create a retry policy
+    retry_policy = ExponentialBackoffRetryPolicy(
+        max_retries=5,
+        initial_delay=0.1,
+        max_delay=10.0,
+        backoff_factor=2.0,
+        jitter=True
+    )
+
+    # Create a client with the retry policy
+    async with RestClient(
+        base_url="https://api.example.com",
+        retry_policy=retry_policy,
+        retryable_status_codes=[429, 500, 502, 503, 504]  # Status codes to retry
+    ) as client:
+        # Requests will automatically use the retry policy
+        try:
+            response = await client.get("/flaky-endpoint")
+            data = await response.json()
+            print(data)
+        except Exception as e:
+            print(f"Failed after multiple retries: {e}")
+
+        # Combine pagination and retry
+        async for items in client.paginate(
+            "/large-collection",
+            pagination_strategy=PageNumberPaginationStrategy(),
+            # Pagination will also use the configured retry policy
+        ):
+            process_items(items)
+```
+
+### Advanced Configuration
+
+```python
+from grpy.rest_client import RestClient
+from grpy.logging import Logger
+from grpy.retry_manager import RetryManager
+from grpy.retry_policies import FixedDelayRetryPolicy
+
+async def main():
+    # Custom retry manager with multiple policies
+    retry_manager = RetryManager()
+    retry_manager.register_policy("fixed", FixedDelayRetryPolicy(
+        max_retries=3,
+        delay=1.0
+    ))
+    retry_manager.set_default_policy("fixed")
+
+    # Create a client with custom headers and advanced configuration
+    async with RestClient(
+        base_url="https://api.example.com",
+        headers={
+            "Authorization": "Bearer token123",
+            "X-API-Key": "your-api-key"
+        },
+        timeout=60,
+        retry_manager=retry_manager,
+        logger=Logger(name="api-client", level=Logger.INFO, log_file="api.log")
+    ) as client:
+        # The client will use all the configured components
+        response = await client.get("/secure-resource")
+        print(await response.json())
 ```
 
 ## Development
