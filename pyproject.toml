@@ -47,9 +47,27 @@ dev = [
     "twine"
 ]
 
+[tool.hatch.build]
+packages = ["src/grpy"]
+
 [tool.hatch.build.targets.wheel]
-only-include = ["src"]
-sources = ["src"]
+packages = ["src/grpy"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/grpy",
+    "LICENSE.txt",
+    "README.md",
+    "pyproject.toml"
+]
+exclude = [
+    "*.pyc",
+    "/.git",
+    "/.github",
+    "/.pytest_cache",
+    "/.vscode",
+    "tests"
+]
 
 [tool.black]
 line-length = 100
